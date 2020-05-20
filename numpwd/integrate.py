@@ -56,7 +56,7 @@ def integrate(expr: Symbol, boundaries: Tuple(Symbol, Symbol, Symbol)) -> Symbol
     if not isinstance(var, Symbol):
         var = Symbol(var)
 
-    summands, basis = expr.expand().as_terms()
+    summands, basis = expr.simplify().expand().as_terms()
 
     out = 0
     for term, (_, powers, _) in summands:
