@@ -9,22 +9,25 @@ from sympy import integrate as _integrate
 
 
 def get_spherical_substitutions(
-    vec: str, label: Optional[str] = None
+    vec: str = "p", label: Optional[str] = None
 ) -> Dict[str, str]:
     """Retuns substitution from cartesian to spherical coordinates
 
     Arguemnts:
         vec: Name of the vector (e.g., `p`)
-        label: Lable of the vector (e.g., `1`)
+        label: Lable of the vector (e.g., `i`)
     """
+    llabel = f"_{label}" if label else ""
     return {
-        f"{vec}{label}1": f"{vec}{label} * x{label} * cos(phi{label})",
-        f"{vec}{label}2": f"{vec}{label} * x{label} * sin(phi{label})",
-        f"{vec}{label}3": f"{vec}{label} * sqrt(1 - x{label}**2)",
+        f"{vec}_{label}1": f"{vec}{llabel} * x{llabel} * cos(phi{llabel})",
+        f"{vec}_{label}2": f"{vec}{llabel} * x{llabel} * sin(phi{llabel})",
+        f"{vec}_{label}3": f"{vec}{llabel} * sqrt(1 - x{llabel}**2)",
     }
 
 
-def get_angular_substitutions(var1: str = "phi1", var2: str = "phi2") -> Dict[str, str]:
+def get_angular_substitutions(
+    var1: str = "phi_i", var2: str = "phi_o"
+) -> Dict[str, str]:
     """Returns cms substitutions solved for var1 and var2
 
     Phi = (var1 + var2)/2
@@ -43,7 +46,9 @@ def cached_integrate(*args, **kwargs) -> Symbol:
     return _integrate(*args, **kwargs)
 
 
-def integrate(expr: Symbol, boundaries: Tuple(Symbol, Symbol, Symbol)) -> Symbol:
+def integrate(
+    expr: Symbol, boundaries: Tuple[Symbol, Symbol, Symbol] = ("Phi", 0, "2*pi")
+) -> Symbol:
     """Wrapper for sympies integrate which integrates each summand of a given term and
     caches intermediate results. This speeds up integrations of sums of similiar terms.
 
@@ -70,3 +75,17 @@ def integrate(expr: Symbol, boundaries: Tuple(Symbol, Symbol, Symbol)) -> Symbol
         out += term / kernel * integrated
 
     return out
+
+
+SPHERICAL_BASE_SUBS = {
+    **get_spherical_substitutions("p", "i"),
+    **get_spherical_substitutions("p", "o"),
+}
+ANGLE_BASE_SUBS = get_angular_substitutions()
+
+
+def integrate_out_angle(expr: Symbol) -> Symbol:
+    """Replaces cartesian expressions with spherical expressions, substitutes to
+    angular CMS coordiantes and integrates out `Phi`
+    """
+    return integrate(expr.subs(SPHERICAL_BASE_SUBS).subs(ANGLE_BASE_SUBS))
