@@ -170,7 +170,7 @@ def dict_to_data(
     data = []
 
     for keys, val in matrix.items():
-        data.append({label: key for label, key in zip(columns, keys)})
+        data.append({zip(columns, keys)})
         data[-1]["val"] = val
 
     return data
