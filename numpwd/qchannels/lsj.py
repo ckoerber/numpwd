@@ -46,23 +46,19 @@ def get_two_n_channels(
     for l, s, j in product(*map(range, [l_max + 1, s_max + 1, j_max + 1])):
         for ml, ms, mj in product(*map(m_range, [l, s, j])):
 
-            channels.append(
-                {
-                    "l": l,
-                    "ml": ml,
-                    "s": s,
-                    "ms": ms,
-                    "j": j,
-                    "mj": mj,
-                    "cg": get_cg(l, ml, s, ms, j, mj, numeric=numeric),
-                }
-            )
+            cg = get_cg(l, ml, s, ms, j, mj, numeric=numeric)
+            if abs(cg) > 1.0e-7:
+                channels.append(
+                    {"l": l, "ml": ml, "s": s, "ms": ms, "j": j, "mj": mj, "cg": cg}
+                )
+
+    return channels
 
 
 def generate_matrix_channels(
     two_n_channels: Dict[str, Number],
     allowed_transitions: Optional[
-        List[Callable[[Dict[str, Number], Dict[str, Number]]], bool]
+        List[Callable[[Dict[str, Number], Dict[str, Number]], bool]]
     ] = None,
 ) -> Generator[Dict[str, Number], None, None]:
     """Generates all in and out two-n channles for input two_n_channels
