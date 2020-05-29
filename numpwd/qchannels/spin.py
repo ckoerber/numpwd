@@ -101,7 +101,7 @@ def pauli_contract_subsystem(
                 res += tres
 
             if res != 0:
-                op_dict[(j_out, mj_out, j_in, mj_in)] = res
+                op_dict[(j_out, mj_out, j_in, mj_in)] = res.expand().simplify()
 
     return op_dict
 
