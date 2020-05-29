@@ -5,6 +5,7 @@
 from typing import Dict
 from typing import List
 from typing import Tuple
+from typing import Union
 
 from itertools import product
 
@@ -135,7 +136,7 @@ def pauli_substitution(
 
 
 def expression_to_matrix(
-    op_expression: Symbol, pauli_symbol: str = "sigma"
+    op_expression: Union[str, Symbol], pauli_symbol: str = "sigma"
 ) -> Dict[Tuple[Symbol, Symbol, Symbol, Symbol], Number]:
     """Converts pauli matrix expression to callable matrix for spins.
 
@@ -143,6 +144,8 @@ def expression_to_matrix(
     where the first index corresponds to the pauli matrix and the second to the nucleon
     subsystem.
     """
+    if isinstance(op_expression, str):
+        op_expression = S(op_expression)
 
     matrix = {}
 
