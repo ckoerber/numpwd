@@ -1,3 +1,4 @@
+# pylint:disable=C0103
 """Computations & help functions used for spin-orbit couplings
 """
 from typing import Iterable, Generator, Dict, Optional, List, Callable

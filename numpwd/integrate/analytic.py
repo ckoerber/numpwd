@@ -66,7 +66,7 @@ def integrate(
     out = 0
     for term, (_, powers, _) in summands:
         kernel = 1
-        for ee, pp in zip(basis, powers):
+        for ee, pp in zip(basis, powers):  # pylint:disable=C0103
             if var in ee.free_symbols:
                 kernel *= ee ** pp
 

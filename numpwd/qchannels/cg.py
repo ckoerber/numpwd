@@ -1,9 +1,9 @@
+# pylint:disable=C0103
 """Cached version of sympys cg functions
 """
 from typing import Union
 from functools import lru_cache
 
-from sympy import Symbol
 from sympy import Number as SympyNumber
 from sympy.physics.quantum.cg import CG
 

@@ -1,3 +1,4 @@
+# pylint:disable=C0103
 """Module to compute spin operator Partial Wave Decompositions
 """
 
@@ -182,7 +183,7 @@ def dict_to_data(
 def get_spin_matrix_element(
     expr: Symbol, pauli_symbol: str = "sigma"
 ) -> List[Dict[str, Number]]:
-    """Converts sympy expression containing pauli matrices to a spin decomposed matrix element.
+    r"""Converts sympy expression containing pauli matrices to a spin decomposed matrix element.
 
     It computes < s_o ms_o | expr | s_i ms_i> where the bra and ket correspond to a
     coupled spin-1/2 system: <1/2 m1, 1/2 m2 | s ms>.
