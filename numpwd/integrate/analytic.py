@@ -19,9 +19,9 @@ def get_spherical_substitutions(
     """
     llabel = f"_{label}" if label else ""
     return {
-        f"{vec}_{label}1": f"{vec}{llabel} * x{llabel} * cos(phi{llabel})",
-        f"{vec}_{label}2": f"{vec}{llabel} * x{llabel} * sin(phi{llabel})",
-        f"{vec}_{label}3": f"{vec}{llabel} * sqrt(1 - x{llabel}**2)",
+        f"{vec}_{label}1": f"{vec}{llabel} * sqrt(1 - x{llabel}**2) * cos(phi{llabel})",
+        f"{vec}_{label}2": f"{vec}{llabel} * sqrt(1 - x{llabel}**2) * sin(phi{llabel})",
+        f"{vec}_{label}3": f"{vec}{llabel} * x{llabel}",
     }
 
 
