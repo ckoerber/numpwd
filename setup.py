@@ -16,6 +16,12 @@ with open(path.join(CWD, "README.md"), encoding="utf-8") as inp:
 with open(path.join(CWD, "requirements.txt"), encoding="utf-8") as inp:
     REQUIREMENTS = [el.strip() for el in inp.read().split(",")]
 
+with open(path.join(CWD, "requirements-gpu.txt"), encoding="utf-8") as inp:
+    REQUIREMENTS_GPU = [el.strip() for el in inp.read().split(",")]
+
+with open(path.join(CWD, "requirements-dev.txt"), encoding="utf-8") as inp:
+    REQUIREMENTS_DEV = [el.strip() for el in inp.read().split(",")]
+
 setup(
     name="numpwd",
     version=__version__,
@@ -28,4 +34,5 @@ setup(
     keywords=[],
     packages=find_packages(exclude=["docs", "tests"]),
     install_requires=REQUIREMENTS,
+    extras_require={"gpu": REQUIREMENTS_GPU, "dev": REQUIREMENTS_DEV},
 )
