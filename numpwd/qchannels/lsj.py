@@ -1,7 +1,7 @@
 # pylint:disable=C0103
 """Computations & help functions used for spin-orbit couplings
 """
-from typing import Iterable, Generator, Dict, Optional, List, Callable
+from typing import Iterable, Generator, Dict, Optional, List, Callable, Tuple
 
 from itertools import product
 
@@ -85,3 +85,54 @@ def generate_matrix_channels(
             data.update({key + "_i": val for key, val in c_i.items()})
             data.update({key + "_o": val for key, val in c_o.items()})
             yield data
+
+
+def project_op(
+    data: List[Dict[str, Number]],
+    out_key: str,
+    in_key: str,
+    m_key: str = "m{key}",
+    val_key: str = "val",
+) -> Dict[Tuple[int, int, int, int], Number]:
+    r"""Projects operator onto its partial wave ranks
+
+    Arguments:
+        data: List of dictionaries containing in-/out-channel data including m values
+        out_key: Name of the key for j_o
+        in_key: Name of the key for j_i
+        m_key: How to obtain m_key names for j key names
+        val_key: Operator matrix element
+
+    Returns:
+        Dictionary for op decomposed matrix element. Keys are (j_o, j_i, j, m_j).
+
+    Details:
+        Transformation is defined as
+          O_{(j_o, j_i)j m_j}
+          =
+          \\frac{2 j + 1}{2 j_o + 1}
+          \\Sum_{m_{j_o}, m_{j_i}}
+          \\left\\langle j_i m_{j_i}, j m_j | j_o m_{j_o} \\right\\rangle
+    """
+    res = {}
+    for entry in data:
+        ji = entry[in_key]
+        jo = entry[out_key]
+        mi = entry[m_key.format(key=in_key)]
+        mo = entry[m_key.format(key=out_key)]
+
+        for jj in range(abs(ji - jo), ji + jo + 1):
+            mj = mo - mi
+            if abs(mj) > jj:
+                continue
+
+            val = (
+                entry[val_key]
+                * (2 * jj + 1)
+                / (2 * jo + 1)
+                * get_cg(ji, mi, jj, mj, jo, mo)
+            )
+
+            res[(jo, ji, jj, mj)] = res.get((jo, ji, jj, mj), 0) + val
+
+    return res
