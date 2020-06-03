@@ -137,10 +137,13 @@ class ReducedAngularPolynomial:  # pylint: disable=too-few-public-methods, too-m
                 if mli + mla != mlo:
                     continue
 
+                # Note that Y_lm have been computed for phi = 0
+                ## Since exp(I mla Phi) is in spin element
+                ## This term only contains (ml_i + ml_o) / 2
                 self.matrix[idx] += (
                     ylmo[lo, mlo]
                     * ylmi[li, mli]
-                    * e_i_phi ** mli
+                    * e_i_phi ** ((mli + mlo) / 2)
                     * cg(li, mli, la, mla, lo, mlo, numeric=True)
                 )
 
