@@ -107,14 +107,15 @@ class ReducedAngularPolynomialTestCase(TestCase):  # pylint: disable=R0902
 
         $$
         \\begin{aligned}
-        & 2 \\pi
-        \\frac{2 \\lambda_1 + 1}{2 l_{o_1} + 1}
+        &
+        2 \\pi
         \\int_{0}^{2 \\pi} d \\phi
         \\int_{0}^{\\pi} d x_o
         \\int_{0}^{\\pi} d x_i
         O_{(l_{o_1} l_{i_1}) \\lambda_1 m_{\\lambda}}^*(x_o, x_i, \\phi)
         O_{(l_{o_2} l_{i_2}) \\lambda_2 m_{\\lambda}}  (x_o, x_i, \\phi)
         \\\\\\\\ & =
+        \\frac{2 \\lambda_1 + 1}{2 l_{o_1} + 1}
         \\delta_{l_{o_1}l_{o_2}}
         \\delta_{l_{i_1}l_{i_2}}
         \\delta_{\\lambda_1\\lambda_2}
@@ -160,8 +161,9 @@ class ReducedAngularPolynomialTestCase(TestCase):  # pylint: disable=R0902
         with self.subTest("Imag vanishes"):
             self.assertTrue(np.abs(res.imag).sum() < 1.0e-12)
 
+        # Normalize result to be equal to one
         prod["res"] = (
-            res.real * (2 * prod["la1"] + 1) / (2 * prod["lo1"] + 1) * np.pi * 2
+            res.real / (2 * prod["la1"] + 1) * (2 * prod["lo1"] + 1) * np.pi * 2
         )
 
         with self.subTest("Off diagonal vanish"):

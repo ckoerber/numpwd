@@ -145,6 +145,8 @@ class ReducedAngularPolynomial:  # pylint: disable=too-few-public-methods, too-m
                     * ylmi[li, mli]
                     * e_i_phi ** ((mli + mlo) / 2)
                     * cg(li, mli, la, mla, lo, mlo, numeric=True)
+                    * (2 * la + 1)
+                    / (2 * lo + 1)
                 )
 
     def __iter__(self):
