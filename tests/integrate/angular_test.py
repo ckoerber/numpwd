@@ -1,23 +1,25 @@
 # pylint: disable=C0103
-"""Tests for the angular polynomial
-"""
+"""Tests for the angular polynomial."""
+from itertools import product
+
 from unittest import TestCase
 
 import numpy as np
 import pandas as pd
 
+from scipy.special import sph_harm
+
+from numpwd.qchannels.cg import get_cg
 from numpwd.integrate.angular import ReducedAngularPolynomial, get_x_mesh, get_phi_mesh
 
 
 class ReducedAngularPolynomialTestCase(TestCase):  # pylint: disable=R0902
-    """Tests for the reducde angular polynomial
-    """
+    """Tests for the reducde angular polynomial."""
 
     places = 7
 
     def setUp(self):
-        """Sets up the angular mesh
-        """
+        """This method creates angular meshes."""
         self.nx = 10
         self.x, self.wx = get_x_mesh(self.nx)
 
@@ -56,11 +58,10 @@ class ReducedAngularPolynomialTestCase(TestCase):  # pylint: disable=R0902
         self.assertAlmostEqual(np.pi, integral, places=self.places)
 
     def test_03_shapes(self):
-        """Test if angular polynomial has correct shapes
-        """
+        """Tests if angular polynomial has correct shapes."""
         with self.subTest("Test number of symmetric channels"):
             # for each li == lo we have 0...2li entries for la
-            ## This is Sum(l=0..lmax, 2l+1) = (lmax + 1) + lmax * (lmax+1)
+            # This is Sum(l=0..lmax, 2l+1) = (lmax + 1) + lmax * (lmax+1)
             n_symmetric_expected = self.lmax * (self.lmax + 1) + (1 + self.lmax)
             n_symmetric_actual = (
                 self.poly.channel_df.query("lo == li")[["lo", "li", "la"]]
@@ -91,8 +92,7 @@ class ReducedAngularPolynomialTestCase(TestCase):  # pylint: disable=R0902
             )
 
     def test_04_poly_iteration(self):
-        """Test if iterating over channels gives the expected result
-        """
+        """Tests if iterating over channels gives the expected result."""
         for idx, (chan, mat) in enumerate(self.poly):
             self.assertEqual(chan, self.poly.channel_df.loc[idx].to_dict())
             np.testing.assert_equal(mat, self.poly.matrix[idx])
@@ -103,7 +103,7 @@ class ReducedAngularPolynomialTestCase(TestCase):  # pylint: disable=R0902
                 np.testing.assert_equal(mat, self.poly.matrix[idx])
 
     def test_05_orthogonality(self):
-        r"""Tests orhtogonality of reduced angular polynomial
+        r"""Tests orhtogonality of reduced angular polynomial.
 
         $$
         \\begin{aligned}
@@ -174,3 +174,133 @@ class ReducedAngularPolynomialTestCase(TestCase):  # pylint: disable=R0902
             diag_entries = prod.query("id1 == id2")["res"]
             expected = np.ones(self.poly.nchannels, dtype=float)
             np.testing.assert_almost_equal(expected, diag_entries, decimal=self.places)
+
+    def _generate_op(self):
+        r"""Routine generates spherical harmonic operator.
+
+        Operator corresponds to
+        $$
+        \\int d \\Phi
+        e^{i m_\\lambda \\Phi}
+        Y_{l_{b1} m_{b1}}(x_1, \\phi_1) Y^*_{l_{b2} m_{b2}}(x_2, \\phi_2)
+        $$
+        """
+        channels = []
+        for lo, li in product(range(self.lmax + 1), range(self.lmax + 1)):
+            for mlo, mli in product(range(-lo, lo + 1), range(-li, li + 1)):
+                channels.append([lo, mlo, li, mli])
+
+        nchannels = len(channels)
+        pphi = 0
+        theta = np.arccos(self.x)  # pylint: disable=E1111
+        e_i_phi = np.exp(1j * self.phi).reshape([1, 1, self.nphi])
+
+        matrix = np.zeros(
+            shape=[nchannels, self.nx, self.nx, self.nphi], dtype=np.complex128
+        )
+
+        ylmi = {}
+        ylmo = {}
+        for ll in range(self.lmax + 1):
+            for ml in range(-ll, ll + 1):
+                # WARNING: scipy uses the opposite convention as we use in physics
+                #: e.g.: l=n, ml=m, phi=theta [0, 2pi], theta=phi [0, pi]
+                # ---> left is physics, right is scipy <---
+                # The scipy call structure is thus sph_harm(m, n, theta, phi)
+                # which means we want sph_harm(ml, l, phi, theta)
+                yml = sph_harm(ml, ll, pphi, theta)
+                ylmo[ll, ml] = yml.reshape([self.nx, 1, 1])
+                ylmi[ll, ml] = yml.reshape([1, self.nx, 1])
+
+        for idx, (lo, mlo, li, mli) in enumerate(channels):
+            # Note that Y_lm have been computed for phi = 0
+            # Since exp(I mla Phi) is in spin element
+            # This term only contains (ml_i + ml_o) / 2
+            matrix[idx] += (
+                ylmo[lo, mlo]
+                * ylmi[li, mli]
+                * e_i_phi ** (-(mli + mlo) / 2)
+                * 2
+                * np.pi
+            )
+
+        return channels, matrix
+
+    @staticmethod
+    def _analytic_result(op_qn, ang_qn):
+        r"""Routine returns analytic result.
+
+        $$
+        \frac{2 \lambda + 1}{2l_{b1} + 1}
+        \left\langle l_{b1} m_{b1}, \lambda m_\lambda \vert l_{b1} m_{b1} \right\rangle
+        \delta_{l_{a1} l_{b1}}
+        \delta_{l_{a2} l_{b2}}
+        $$
+        """
+        lo_o, mlo_o, li_o, mli_o = op_qn
+        lo_a, li_a, la_a, mla_a = ang_qn
+
+        fact = (2 * la_a + 1) / (2 * lo_o + 1)
+        return (
+            fact * get_cg(li_o, mli_o, la_a, mla_a, lo_o, mlo_o, numeric=True)
+            if lo_o == lo_a and li_o == li_a
+            else 0
+        )
+
+    def test_06_ylm_operator(self):
+        r"""Tests if angular integration with ylm operator returns expected result.
+
+        Details:
+
+            Using the orhtogonality of spherical harmonics
+            $$
+            \\int d x_1 d \\phi_1
+            Y_{l_a m_a}^*(x_1, \phi_1) Y_{l_b m_b}(x_1, \phi_1)
+            =
+            \\delta_{l_a l_b} \\delta_{m_a m_b}
+            $$
+            this method tests that
+            $$
+            \\frac{2 \\lambda + 1}{2l_{a1} + 1}
+            \\sum_{m_{a1} m_{a2}}
+            \\left\\langle
+                l_{a1} m_{a1}, \\lambda m_\\lambda \\vert l_{a2} m_{a2}
+            \\right\\rangle
+            \\int d x_1 d \\phi_1 \\int d x_2 d \\phi_2
+            Y_{l_{a1} m_{a1}}^*(x_1, \\phi_1) Y_{l_{a2} m_{a2}}(x_2, \\phi_2)
+            Y_{l_{b1} m_{b1}}(x_1, \\phi_1) Y^*_{l_{b2} m_{b2}}(x_2, \\phi_2)
+            =
+            \\frac{2 \\lambda + 1}{2l_{a1} + 1}
+            \\sum_{m_{a1} m_{a2}}
+            \\left\\langle
+                l_{a1} m_{a1}, \\lambda m_\\lambda \\vert l_{a2} m_{a2}
+            \\right\\rangle
+            \\delta_{l_{a1} l_{b1}} \\delta_{m_{a1} m_{b1}}
+            \\delta_{l_{a2} l_{b2}} \\delta_{m_{a2} m_{b2}}
+            $$
+            by identifying the angular polynomial and corresponding op.
+        """
+        op_channels, op_matrix = self._generate_op()
+
+        for (id_op, op_qn), (id_ang, ang_qn) in product(
+            enumerate(op_channels), enumerate(self.poly.channels)
+        ):
+            with self.subTest("Channel product", op_qn=op_qn, ang_qn=ang_qn):
+                mlo_o, mli_o = op_qn[1], op_qn[3]
+                mla_a = ang_qn[3]
+
+                res_numeric = (
+                    np.sum(
+                        op_matrix[id_op]
+                        * self.poly.matrix[id_ang]
+                        * self.wx.reshape((self.nx, 1, 1))
+                        * self.wx.reshape((1, self.nx, 1))
+                        * self.wphi.reshape((1, 1, self.nphi))
+                    )
+                    if mla_a == mlo_o - mli_o
+                    else 0
+                )
+
+                res_analytic = self._analytic_result(op_qn, ang_qn)
+
+                self.assertAlmostEqual(res_numeric, res_analytic, 14)
