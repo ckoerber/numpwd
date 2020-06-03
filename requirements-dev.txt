@@ -1,4 +1,4 @@
 black
-pylint
+flake8
 pytest
 ipykernel
