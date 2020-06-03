@@ -4,6 +4,8 @@
 from typing import Union
 from functools import lru_cache
 
+from numpy import issubdtype, integer
+
 from sympy import Number as SympyNumber
 from sympy.physics.quantum.cg import CG
 
@@ -28,7 +30,11 @@ class QuantumNumberError(Exception):
 def is_int(nn: Number) -> bool:
     """Checks if an expression is of integer type
     """
-    return isinstance(nn, int) or isinstance(nn, SympyNumber) and nn.is_integer
+    return (
+        isinstance(nn, int)  # Check generic int
+        or (isinstance(nn, SympyNumber) and nn.is_integer)  # Check sympy
+        or issubdtype(nn, integer)  # Check numpy
+    )
 
 
 def check_jm(j, m, **context):
@@ -50,11 +56,17 @@ def check_jm(j, m, **context):
             "Absolute of m-value larger than j", j=j, m=m, **context
         )
     if not is_int(j * 2):
-        raise QuantumNumberError("j*2 is not an integer", j=j, m=m, **context)
+        raise QuantumNumberError(
+            "j*2 is not an integer", j=j, m=m, type_j=type(j), **context
+        )
     if not is_int(m * 2):
-        raise QuantumNumberError("m*2 is not an integer", j=j, m=m, **context)
+        raise QuantumNumberError(
+            "m*2 is not an integer", j=j, m=m, type_m=type(m), **context
+        )
     if not is_int(j + m):
-        raise QuantumNumberError("j+m is not an integer", j=j, m=m, **context)
+        raise QuantumNumberError(
+            "j+m is not an integer", j=j, m=m, type_j=type(j), type_m=type(m), **context
+        )
 
 
 @lru_cache(maxsize=128)
@@ -98,6 +110,6 @@ def get_cg(  # pylint: disable=too-many-arguments
     else:
         cg = CG(j1, m1, j2, m2, j3, m3)
         cg = cg.doit() if doit or numeric else cg
-        cg = cg.evalf() if numeric else cg
+        cg = float(cg) if numeric else cg
 
     return cg
