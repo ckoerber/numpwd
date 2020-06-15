@@ -307,11 +307,46 @@ class ReducedAngularPolynomialTestCase(TestCase):  # pylint: disable=R0902
 
     def test_07_expression_1(self):
         r"""Tests if angular pwd of $(p_i - p_o) \cdot q$ returns expected result.
+
+        Computes
+        $$
+        \\sum_{m_i m_o}
+        \\left\\langle l_i m_i , \\lambda m_\\lambda | l_o m_o \\right\\rangle
+        \int d \Omega_1 d \Omega_2
+            Y_{l_o m_o}^*(\Omega_o) Y_{l_i m_i}(\Omega_i)
+            \left[\vec p_o - \vec p_i \right]\cdot \vec q
+        $$
+        for general q using the angular PWD formalism
+
+        Expected result (after exanding scalar product and substituing Ylms).
+
+        Todo: At results for mla != 0
         """
+
         from numpy.polynomial.legendre import leggauss
         from sympy import expand_trig, S
         from numpwd.integrate.analytic import integrate
         from numpwd.integrate.numeric import ExprToTensorWrapper
+        from numpwd.qchannels.cg import get_cg
+
+        expected = [
+            {
+                "lo": 0,
+                "li": 1,
+                "la": 1,
+                "mla": 0,
+                "val": -S("p_i * q3 / (1/4/pi * sqrt(3)) * 3")
+                * get_cg(1, 0, 1, 0, 0, 0, numeric=True),
+            },
+            {
+                "lo": 1,
+                "li": 0,
+                "la": 1,
+                "mla": 0,
+                "val": S("p_o * q3 / (1/4/pi * sqrt(3)) * 3 / 3")
+                * get_cg(0, 0, 1, 0, 1, 0, numeric=True),
+            },
+        ]
 
         p_dot_q = (
             "p{i} * (q1 * cos(phi{i}) * sqrt(1 - x{i}**2)"
@@ -335,7 +370,7 @@ class ReducedAngularPolynomialTestCase(TestCase):  # pylint: disable=R0902
         # allocate grid
         p_o = np.array([2, 3])
         p_i = np.array([4, 3, 5])
-        q1, q2, q3 = 1, 0, 0
+        q1, q2, q3 = 1, 2, 3
         q = np.sqrt([q1 ** 2 + q2 ** 2 + q3 ** 2])
 
         nx = 30
@@ -358,9 +393,9 @@ class ReducedAngularPolynomialTestCase(TestCase):  # pylint: disable=R0902
         df = poly.channel_df.copy()
         data = []
         for mla in df.mla.unique():
-            expr = big_phi_int_expr.get(mla, S(0)).subs({"q1": q1, "q2": q2, "q3": q3})
+            idx = df["mla"] == mla
 
-            # only convert to array if non-zero
+            expr = big_phi_int_expr.get(mla, S(0)).subs({"q1": q1, "q2": q2, "q3": q3})
             if expr:
                 op_fcn = ExprToTensorWrapper(
                     expr, ("p_o", "p_i", "q", "x_o", "x_i", "phi")
@@ -368,8 +403,6 @@ class ReducedAngularPolynomialTestCase(TestCase):  # pylint: disable=R0902
                 op_matrix = op_fcn(p_o, p_i, q, x, x, phi)
             else:
                 op_matrix = np.zeros((len(p_o), len(p_i), len(q), nx, nx, nphi))
-
-            idx = df["mla"] == mla
 
             res = np.sum(
                 op_matrix.reshape((1, len(p_o), len(p_i), len(q), nx, nx, nphi))
@@ -388,4 +421,17 @@ class ReducedAngularPolynomialTestCase(TestCase):  # pylint: disable=R0902
                     or (res["li"] == 0 and res["lo"] == 1)
                 )
                 self.assertEqual(res["la"], 1)
-                self.assertEqual(abs(res["mla"]), 1)
+                self.assertTrue(res["mla"] in [-1, 0, 1])
+
+        # Convert expected results to array
+        expected = {
+            (el["lo"], el["li"], el["la"], el["mla"]): ExprToTensorWrapper(
+                el["val"].subs({"q1": q1, "q2": q2, "q3": q3}), ("p_o", "p_i", "q")
+            )(p_o, p_i, q)
+            for el in expected
+        }
+
+        for res in data:
+            key = (res["lo"], res["li"], res["la"], res["mla"])
+            if key in expected:
+                np.testing.assert_almost_equal(expected[key], res["val"])
