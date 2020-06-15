@@ -193,7 +193,7 @@ class ReducedAngularPolynomialTestCase(TestCase):  # pylint: disable=R0902
         nchannels = len(channels)
         pphi = 0
         theta = np.arccos(self.x)  # pylint: disable=E1111
-        e_i_phi = np.exp(1j * self.phi).reshape([1, 1, self.nphi])
+        e_i_phi_half = np.exp(1j * self.phi / 2).reshape([1, 1, self.nphi])
 
         matrix = np.zeros(
             shape=[nchannels, self.nx, self.nx, self.nphi], dtype=np.complex128
@@ -219,7 +219,7 @@ class ReducedAngularPolynomialTestCase(TestCase):  # pylint: disable=R0902
             matrix[idx] += (
                 ylmo[lo, mlo]
                 * ylmi[li, mli]
-                * e_i_phi ** (-(mli + mlo) / 2)
+                * e_i_phi_half ** (-(mli + mlo))
                 * 2
                 * np.pi
             )
@@ -304,3 +304,88 @@ class ReducedAngularPolynomialTestCase(TestCase):  # pylint: disable=R0902
                 res_analytic = self._analytic_result(op_qn, ang_qn)
 
                 self.assertAlmostEqual(res_numeric, res_analytic, 14)
+
+    def test_07_expression_1(self):
+        r"""Tests if angular pwd of $(p_i - p_o) \cdot q$ returns expected result.
+        """
+        from numpy.polynomial.legendre import leggauss
+        from sympy import expand_trig, S
+        from numpwd.integrate.analytic import integrate
+        from numpwd.integrate.numeric import ExprToTensorWrapper
+
+        p_dot_q = (
+            "p{i} * (q1 * cos(phi{i}) * sqrt(1 - x{i}**2)"
+            " + q2 * sin(phi{i}) * sqrt(1 - x{i}**2)"
+            " + q3 * x{i})"
+        )
+        expr = S(p_dot_q.format(i="_o")) - S(p_dot_q.format(i="_i"))
+
+        # run angular integrations (only results for mla == 1 survive)
+        big_phi_int_expr = {}
+        for mla in range(-1, 2):
+            big_phi_int_expr[mla] = integrate(
+                expand_trig(expr.subs({"phi_i": "Phi + phi/2", "phi_o": "Phi - phi/2"}))
+                * S(f"exp(-I * {mla} * Phi)")
+            )
+        # Convert expression to numpy function
+        op_fcn = ExprToTensorWrapper(
+            big_phi_int_expr, ("p_o", "p_i", "q", "x_o", "x_i", "phi")
+        )
+
+        # allocate grid
+        p_o = np.array([2, 3])
+        p_i = np.array([4, 3, 5])
+        q1, q2, q3 = 1, 0, 0
+        q = np.sqrt([q1 ** 2 + q2 ** 2 + q3 ** 2])
+
+        nx = 30
+        nphi = 20
+        lmax = 3
+
+        phi, wphi = get_phi_mesh(nphi)
+        x, wx = leggauss(nx)
+
+        # allocate reduced angular polynomial
+        poly = ReducedAngularPolynomial(x, phi, lmax=lmax)
+        poly_kernel = (
+            poly.matrix
+            * wx.reshape((1, nx, 1, 1))
+            * wx.reshape((1, 1, nx, 1))
+            * wphi.reshape((1, 1, 1, nphi))
+        )
+
+        # integrate
+        df = poly.channel_df.copy()
+        data = []
+        for mla in df.mla.unique():
+            expr = big_phi_int_expr.get(mla, S(0)).subs({"q1": q1, "q2": q2, "q3": q3})
+
+            # only convert to array if non-zero
+            if expr:
+                op_fcn = ExprToTensorWrapper(
+                    expr, ("p_o", "p_i", "q", "x_o", "x_i", "phi")
+                )
+                op_matrix = op_fcn(p_o, p_i, q, x, x, phi)
+            else:
+                op_matrix = np.zeros((len(p_o), len(p_i), len(q), nx, nx, nphi))
+
+            idx = df["mla"] == mla
+
+            res = np.sum(
+                op_matrix.reshape((1, len(p_o), len(p_i), len(q), nx, nx, nphi))
+                * poly_kernel[idx].reshape((idx.sum(), 1, 1, 1, nx, nx, nphi)),
+                axis=(-1, -2, -3),
+            )
+            for chan, val in zip(df.loc[idx].to_dict("records"), res):
+                if (np.abs(val) > 1.0e-10).any():
+                    data.append({**chan, "val": val})
+
+        # Run tests
+        for res in data:
+            with self.subTest("Check quantum numbers", channel=res):
+                self.assertTrue(
+                    (res["li"] == 1 and res["lo"] == 0)
+                    or (res["li"] == 0 and res["lo"] == 1)
+                )
+                self.assertEqual(res["la"], 1)
+                self.assertEqual(abs(res["mla"]), 1)

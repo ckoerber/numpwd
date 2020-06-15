@@ -49,11 +49,11 @@ class ReducedAngularPolynomial:  # pylint: disable=too-few-public-methods, too-m
     \\frac{2 \\lambda + 1}{2 l_o + 1}
     \\sum_{m_o m_i} &
     \\left\\langle l_i m_i , \\lambda m_{\\lambda}
-    \\middle\\vert l_o m_lo
+    \\middle\\vert l_o m_o
     \\right\\rangle
     \\\\\\\\ & \\times
     Y_{l_o m_o}^*(x_o, \\phi_o) Y_{l_i m_i}(x_i, \\phi_i)
-    \\exp\\{ - i m_{\\lambda} (\\Phi - \\phi / 2)\\}
+    \\exp\\{ i \\phi \\frac{m_i + m_o}{2} \\}
     \\end{aligned}
     $$
 
@@ -63,6 +63,11 @@ class ReducedAngularPolynomial:  # pylint: disable=too-few-public-methods, too-m
     \\Phi = \\frac{\\phi_i + \\phi_o}{2}
     \\, , \\qquad
     \\phi = \\phi_i - \\phi_o
+    $$
+
+    This makes use that the integration over angle $\\Phi$ can be factored out:
+    $$
+    \\exp\\{ -i \\Phi (m_o - m_i)\\} = \\exp\\{ -i \\Phi m_{la} \\}
     $$
     """
 
@@ -92,7 +97,7 @@ class ReducedAngularPolynomial:  # pylint: disable=too-few-public-methods, too-m
         for lo, li in product(range(self.lmax + 1), range(self.lmax + 1)):
             for la in range(abs(li - lo), li + lo + 1):
                 for mla in range(-la, la + 1):
-                    channels.append([lo, li, la, mla])
+                    channels.append((lo, li, la, mla))
 
         self.nchannels = len(channels)
         self.channels = np.array(channels, dtype=int)
@@ -111,10 +116,11 @@ class ReducedAngularPolynomial:  # pylint: disable=too-few-public-methods, too-m
         nphi = len(self.phi)
 
         self.matrix = np.zeros(
-            shape=[self.nchannels, nx, nx, nphi], dtype=np.complex128
+            shape=(self.nchannels, nx, nx, nphi), dtype=np.complex128
         )
 
-        e_i_phi = np.exp(1j * self.phi).reshape([1, 1, nphi]) + self.matrix[0]
+        # Put half here because np.exp(-1j * np.pi) / np.exp(-2j * np.pi) ** (1/2) == -1
+        e_i_phi_half = np.exp(1j * self.phi / 2).reshape((1, 1, nphi))
 
         phi = 0
         theta = np.arccos(self.x)  # pylint: disable=E1111
@@ -129,8 +135,8 @@ class ReducedAngularPolynomial:  # pylint: disable=too-few-public-methods, too-m
                 ## The scipy call structure is thus sph_harm(m, n, theta, phi)
                 ## which means we want sph_harm(ml, l, phi, theta)
                 yml = sph_harm(ml, l, phi, theta)
-                ylmo[l, ml] = yml.reshape([nx, 1, 1]) + self.matrix[0]
-                ylmi[l, ml] = yml.reshape([1, nx, 1]) + self.matrix[0]
+                ylmo[l, ml] = yml.reshape((nx, 1, 1))
+                ylmi[l, ml] = yml.reshape((1, nx, 1))
 
         for idx, (lo, li, la, mla) in enumerate(self.channels):
             for mlo, mli in product(range(-lo, lo + 1), range(-li, li + 1)):
@@ -143,7 +149,7 @@ class ReducedAngularPolynomial:  # pylint: disable=too-few-public-methods, too-m
                 self.matrix[idx] += (
                     ylmo[lo, mlo]
                     * ylmi[li, mli]
-                    * e_i_phi ** ((mli + mlo) / 2)
+                    * e_i_phi_half ** (mli + mlo)
                     * cg(li, mli, la, mla, lo, mlo, numeric=True)
                     * (2 * la + 1)
                     / (2 * lo + 1)
