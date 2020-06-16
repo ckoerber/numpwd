@@ -305,7 +305,7 @@ class ReducedAngularPolynomialTestCase(TestCase):  # pylint: disable=R0902
 
                 self.assertAlmostEqual(res_numeric, res_analytic, 14)
 
-    def test_07_expression_1(self):
+    def test_07_expression_1(self) -> None:  # noqa: D202
         r"""Tests if angular pwd of $(p_i - p_o) \cdot q$ returns expected result.
 
         Computes
@@ -319,8 +319,6 @@ class ReducedAngularPolynomialTestCase(TestCase):  # pylint: disable=R0902
         for general q using the angular PWD formalism
 
         Expected result (after exanding scalar product and substituing Ylms).
-
-        Todo: At results for mla != 0
         """
 
         from numpy.polynomial.legendre import leggauss
@@ -329,7 +327,63 @@ class ReducedAngularPolynomialTestCase(TestCase):  # pylint: disable=R0902
         from numpwd.integrate.numeric import ExprToTensorWrapper
         from numpwd.qchannels.cg import get_cg
 
+        y00_fact = S("1/2 * sqrt(1/pi)")
+        y11_fact = S("1/2 * sqrt(3/pi/2)")
         expected = [
+            {
+                "lo": 0,
+                "li": 1,
+                "la": 1,
+                "mla": 1,
+                "val": S("p_i")
+                / y00_fact
+                / y11_fact
+                / 2
+                * (-S("q1") - S("q2 / I"))
+                * get_cg(1, 1, 1, -1, 0, 0, numeric=True)
+                * 3,
+            },
+            {
+                "lo": 0,
+                "li": 1,
+                "la": 1,
+                "mla": -1,
+                "val": S("p_i")
+                / y00_fact
+                / y11_fact
+                / 2
+                * (S("q1") - S("q2 / I"))
+                * get_cg(1, 1, 1, -1, 0, 0, numeric=True)
+                * 3,
+            },
+            {
+                "lo": 1,
+                "li": 0,
+                "la": 1,
+                "mla": 1,
+                "val": S("p_o")
+                / y00_fact
+                / y11_fact
+                / 2
+                * (-S("q1") - S("q2 / I"))
+                * get_cg(0, 0, 1, 1, 1, 1, numeric=True)
+                * 3
+                / 3,
+            },
+            {
+                "lo": 1,
+                "li": 0,
+                "la": 1,
+                "mla": -1,
+                "val": S("p_o")
+                / y00_fact
+                / y11_fact
+                / 2
+                * (+S("q1") - S("q2 / I"))
+                * get_cg(0, 0, 1, -1, 1, -1, numeric=True)
+                * 3
+                / 3,
+            },
             {
                 "lo": 0,
                 "li": 1,
@@ -413,6 +467,8 @@ class ReducedAngularPolynomialTestCase(TestCase):  # pylint: disable=R0902
                 if (np.abs(val) > 1.0e-10).any():
                     data.append({**chan, "val": val})
 
+        print(data)
+
         # Run tests
         for res in data:
             with self.subTest("Check quantum numbers", channel=res):
@@ -434,4 +490,7 @@ class ReducedAngularPolynomialTestCase(TestCase):  # pylint: disable=R0902
         for res in data:
             key = (res["lo"], res["li"], res["la"], res["mla"])
             if key in expected:
-                np.testing.assert_almost_equal(expected[key], res["val"])
+                val = res.pop("val")
+                np.testing.assert_almost_equal(
+                    expected[key], val, err_msg=f"data: {res}"
+                )
