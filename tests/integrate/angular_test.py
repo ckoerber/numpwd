@@ -324,7 +324,7 @@ class ReducedAngularPolynomialTestCase(TestCase):  # pylint: disable=R0902
         from numpy.polynomial.legendre import leggauss
         from sympy import expand_trig, S
         from numpwd.integrate.analytic import integrate
-        from numpwd.integrate.numeric import ExprToTensorWrapper
+        from numpwd.integrate.numeric import ExpressionMap
         from numpwd.qchannels.cg import get_cg
 
         y00_fact = S("1/2 * sqrt(1/pi)")
@@ -416,11 +416,6 @@ class ReducedAngularPolynomialTestCase(TestCase):  # pylint: disable=R0902
                 expand_trig(expr.subs({"phi_i": "Phi + phi/2", "phi_o": "Phi - phi/2"}))
                 * S(f"exp(-I * {mla} * Phi)")
             )
-        # Convert expression to numpy function
-        op_fcn = ExprToTensorWrapper(
-            big_phi_int_expr, ("p_o", "p_i", "q", "x_o", "x_i", "phi")
-        )
-
         # allocate grid
         p_o = np.array([2, 3])
         p_i = np.array([4, 3, 5])
@@ -451,9 +446,7 @@ class ReducedAngularPolynomialTestCase(TestCase):  # pylint: disable=R0902
 
             expr = big_phi_int_expr.get(mla, S(0)).subs({"q1": q1, "q2": q2, "q3": q3})
             if expr:
-                op_fcn = ExprToTensorWrapper(
-                    expr, ("p_o", "p_i", "q", "x_o", "x_i", "phi")
-                )
+                op_fcn = ExpressionMap(expr, ("p_o", "p_i", "q", "x_o", "x_i", "phi"))
                 op_matrix = op_fcn(p_o, p_i, q, x, x, phi)
             else:
                 op_matrix = np.zeros((len(p_o), len(p_i), len(q), nx, nx, nphi))
@@ -481,7 +474,7 @@ class ReducedAngularPolynomialTestCase(TestCase):  # pylint: disable=R0902
 
         # Convert expected results to array
         expected = {
-            (el["lo"], el["li"], el["la"], el["mla"]): ExprToTensorWrapper(
+            (el["lo"], el["li"], el["la"], el["mla"]): ExpressionMap(
                 el["val"].subs({"q1": q1, "q2": q2, "q3": q3}), ("p_o", "p_i", "q")
             )(p_o, p_i, q)
             for el in expected

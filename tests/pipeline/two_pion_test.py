@@ -1,11 +1,10 @@
-"""Tests assoctiated with scalar dark matter two-pion exchange current
-"""
+"""Tests assoctiated with scalar dark matter two-pion exchange current."""
 import pytest
 
-from pandas import DataFrame, Series
+from pandas import DataFrame
 from pandas.testing import assert_frame_equal
 
-from sympy import S, trigsimp, sqrt, expand_trig
+from sympy import S, sqrt, expand_trig
 
 from numpwd.qchannels.lsj import project_op
 from numpwd.qchannels.spin import get_spin_matrix_element, dict_to_data
@@ -14,7 +13,7 @@ from numpwd.integrate.analytic import SPHERICAL_BASE_SUBS, ANGLE_BASE_SUBS, inte
 
 @pytest.fixture(name="two_pion_numerator_expr")
 def fixture_two_pion_numerator_expr():
-    """Returns numerator of two-pion exchange current
+    """Returns numerator of two-pion exchange current.
 
     op = sigma1 . k1 sigma2 . k2 with k1,2 = q/2 +/- (p_i - p_o)
     """
@@ -33,15 +32,16 @@ def fixture_two_pion_numerator_expr():
 
 @pytest.fixture(name="two_pion_numerator_spin_element")
 def fixture_two_pion_numerator_spin_element(two_pion_numerator_expr):
-    """Computes < s_o ms_o | op | s_i ms_i > for op defined above
-    """
+    """Computes < s_o ms_o | op | s_i ms_i > for op defined above."""
     return get_spin_matrix_element(two_pion_numerator_expr)
 
 
 @pytest.fixture(name="two_pion_numerator_first_integral")
 def fixture_two_pion_numerator_first_integral(two_pion_numerator_spin_element):
-    """Projects < s_o ms_o | op | s_i ms_i > onto sigma, m_sigma, multiplies by
-    exp(I m_sigma (Phi - phi/2)) and integrates out Phi
+    """Returns spin pwd plus integtal.
+
+    Projects < s_o ms_o | op | s_i ms_i > onto sigma, m_sigma, multiplies by
+    exp(I m_sigma (Phi - phi/2)) and integrates out Phi.
     """
     df = DataFrame(
         dict_to_data(
@@ -72,8 +72,7 @@ def fixture_two_pion_numerator_first_integral(two_pion_numerator_spin_element):
 
 @pytest.fixture(name="legacy_results")
 def fixture_legacy_results():
-    """Returns legacy results published in ... for the complete numerator pipeline
-    """
+    """Returns legacy results published in ... for the complete numerator pipeline."""
     alpha = S("p_i**2 + p_o**2 - q**2/4")
     beta = S("exp(I * phi) * p_i * sqrt(1 - x_i**2) - p_o * sqrt(1 - x_o**2)")
     beta_conj = S("exp(-I * phi) * p_i * sqrt(1 - x_i**2) - p_o * sqrt(1 - x_o**2)")
@@ -178,11 +177,5 @@ def fixture_legacy_results():
 
 
 def test_legacy_numerator_pwd(two_pion_numerator_first_integral, legacy_results):
-    # diff = (two_pion_numerator_first_integral - legacy_results).applymap(
-    #        lambda el: el.expand()
-    # )
-    assert_frame_equal(
-        two_pion_numerator_first_integral,
-        legacy_results
-        # Series([S(0)] * legacy_results.shape[0], index=legacy_results.index),
-    )
+    """Asserts legacy operator matches new computation."""
+    assert_frame_equal(two_pion_numerator_first_integral, legacy_results)
