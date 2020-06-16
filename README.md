@@ -23,6 +23,11 @@ Install via pip
 pip install [-e] [--user] .
 ```
 
+
+## Todo
+
+* Write tests for `poly.integrate` method. 
+
 ## Run
 
 
