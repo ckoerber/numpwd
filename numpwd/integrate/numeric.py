@@ -2,7 +2,7 @@
 """
 from typing import List
 
-from numpy import meshgrid, ndarray
+from numpy import meshgrid, ndarray, ones
 from sympy import lambdify, Symbol
 
 
@@ -49,4 +49,8 @@ class ExprToTensorWrapper:  # pylint: disable=R0903
         shape = tuple(len(arg) for arg in args)
         flat_args = self._args_to_flat_tensor(*args)
         flat_res = self._func(*flat_args)
-        return flat_res.reshape(shape)
+        return (
+            flat_res.reshape(shape)
+            if isinstance(flat_res, ndarray)
+            else ones(shape) * flat_res
+        )
