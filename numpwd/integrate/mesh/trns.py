@@ -6,7 +6,7 @@ import numpy as np
 from numpy.polynomial.legendre import leggauss
 
 
-def trns(  # pylint: disable=C0103
+def get_trns_mesh(  # pylint: disable=C0103
     n1: int, n2: int, p1: float = 1.0, p2: float = 6.0, p3: float = 20.0
 ) -> Tuple[np.ndarray, np.ndarray]:
     r"""Allocates transformed Gauss-Legendre mesh for numerical integration.
