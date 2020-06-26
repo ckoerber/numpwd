@@ -138,11 +138,20 @@ def pauli_substitution(
 def expression_to_matrix(
     op_expression: Union[str, Symbol], pauli_symbol: str = "sigma"
 ) -> Dict[Tuple[Symbol, Symbol, Symbol, Symbol], Number]:
-    """Converts pauli matrix expression to callable matrix for spins.
+    """Converts pauli matrix expression to matrix element in spin subsystem.
 
-    'op_expression' is a sympy expression containing pauli matrices like 'tau11 tau12'
-    where the first index corresponds to the pauli matrix and the second to the nucleon
-    subsystem.
+    Computes
+        < 1/2 ms2_out |< 1/2 ms1_out | expr | 1/2 ms1_in >| 1/2 ms2_in >
+
+    Arguments:
+        op_expression: is a sympy expression containing pauli matrices like 'tau11 tau12'
+            where the first index corresponds to the pauli matrix
+            and the second to the nucleon subsystem.
+        pauli_symbol: The symbol which specifies the pauli matrix.
+
+    Returns:
+        Dictionary with keys (ms2_out, ms1_out, ms1_in, ms2_in) and values corresponding
+        to the matrix element.
     """
     if isinstance(op_expression, str):
         op_expression = S(op_expression)
