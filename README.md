@@ -64,7 +64,7 @@ For a large class of operators of interest, this furthermore allows to run one a
 
 To further speed up computations, intermediate results like Clebsch-Gordan coefficients and repeated integrals are cached.
 
-The notebook folder specifies more details and provides examples.
+The docs folder contains a tex file specifying the mathematical aspect and the notebook folder specifies more details and provides examples.
 
 ## Install
 Install via pip

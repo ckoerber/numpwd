@@ -1,0 +1,154 @@
+\documentclass[onecolumn]{revtex4-2}
+\usepackage{amsmath}
+\begin{document}
+\title{Mathematical details of numpwd}
+\author{Christopher K\"orber}
+\maketitle
+
+
+This module computes
+\begin{multline}\label{def:pwd}
+    O_{(l_o s_o)j_o m_{j_o} (l_i s_i)j_i m_{j_i}}(p_o, p_i, \vec{q})
+    \\ =
+    \sum\limits_{m_{s_o} m_{s_i}}
+    \sum\limits_{m_{l_o} m_{l_i}}
+    \left\langle
+        l_o m_{l_o}, s_o m_{s_o} \big\vert j_o m_{j_o}
+    \right\rangle
+    \left\langle
+        l_i m_{l_i}, s_i m_{s_i} \big\vert j_i m_{j_i}
+    \right\rangle
+    \\ \times
+    \int d x_o d x_i d \phi_o d \phi_i
+    Y_{l_o m_{l_o}}^*(x_o, \phi_o)
+    Y_{l_i m_{l_i}}(x_i, \phi_i)
+    \\ \times
+    \left\langle
+        \vec p_o; s_o m_{s_o}
+        \big\vert
+        \hat O(\vec p_o, \vec p_i, \vec q)
+        \big\vert
+        \vec p_i; s_i m_{s_i}
+    \right\rangle
+\end{multline}
+in three steps:
+\begin{enumerate}
+    \item Analytically computing the so called integrated spin decomposed matrix element (ISDME) of the operator
+    \item Numerically integrating the product of the so called reduced angular polynomial (RDP) and the ISDME
+    \item Summing the integral over all allowed channels
+\end{enumerate}
+
+\section{Analytically integrating out one angle}
+
+Propagators usually depend on the difference of incoming and outgoing momenta.
+Thus the denominator of operators usually only depending on the difference of azimuthal angles
+\begin{equation}
+    O(\vec p_o, \vec p_i, \vec q)
+    =
+    \frac{N(\vec p_o, \vec p_i, \vec q)}{D(p_o, p_i, x_o, x_i, \phi_o - \phi_i, \vec q)}
+    \, .
+\end{equation}
+After substituting
+\begin{align}
+    \Phi &= \frac{\phi_i + \phi_o}{2}
+    \, &
+    \phi &= \phi_i - \phi_o
+\end{align}
+one thus finds
+\begin{equation}
+    O(\vec p_o, \vec p_i, \vec q)
+    =
+    \frac{1}{D(p_o, p_i, x_o, x_i, \phi, \vec q)}
+    N(p_o, p_i, x_o, x_i, \phi, \Phi, \vec q)
+    \, ,
+\end{equation}
+where it is quite feasible to run all $\Phi$ integrations by hand (no denominator).
+
+Because the spherical harmonics are factorizable in $\phi$
+\begin{align}
+    Y_{l_o m_{l_o}}^*(x_o, \phi_o)
+    Y_{l_i m_{l_i}}(x_i, \phi_i)
+    &=
+    f_{l_o m_{l_o} l_i m_{l_i}} (x_i, x_o)
+    \exp\left(
+    - i m_{l_o} \phi_o + i m_{l_i} \phi_i
+    \right)\,,
+\end{align}
+it is possible to entirely factor out the $\Phi$ dependece eq.~\eqref{def:pwd}
+\begin{align}
+    \phi_i &= \Phi + \frac{\phi}{2} \,, &
+    \phi_o &= \Phi - \frac{\phi}{2} &
+    \Rightarrow
+    - m_{l_o} \phi_o + m_{l_i} \phi_i
+    &=
+    (m_{l_i} -  m_{l_o}) \Phi + \frac{ m_{l_i} +  m_{l_o}}{2} \phi
+\end{align}
+defining $m_\lambda =  m_{l_o} -  m_{l_i}$, we thus have
+\begin{align}
+    &\int_{0}^{2\pi} d \phi_o d \phi_i
+    Y_{l_o m_{l_o}}^*(x_o, \phi_o)
+    Y_{l_i m_{l_i}}(x_i, \phi_i)
+    O_{s_o m_{s_o} s_i m_{s_i}}(\vec p_o, \vec p_i, \vec q)
+    \\ =&
+    \int_{0}^{2\pi} d \phi
+    f_{l_o m_{l_o} l_i m_{l_i}} (x_i, x_o)
+    \exp\left(i\frac{ m_{l_i} +  m_{l_o}}{2} \phi\right)
+    \\&\qquad\times
+    \frac{1}{D(p_o, p_i, x_o, x_i, \phi, \vec q)}
+    \int_{0}^{2\pi} d \Phi \exp\left(-i m_\lambda \Phi\right)
+    N_{s_o m_{s_o} s_i m_{s_i}}(p_o, p_i, x_o, x_i, \phi, \Phi, \vec q)
+    \,.
+\end{align}
+Note that the integration contours are in principle more difficult and nested, but because of the symmetries of spherical coordinates ($\sin, \cos$ of $\phi_i$ and $\phi_o$ ), this simplifies to independent integrations.
+
+\section{Definitions}
+
+Making the following definitions for the \texbf{reduced angular polynomial}
+\begin{equation}\label{def:red-ang}
+    A_{(l_o l_i)\lambda m_\lambda}(x_i, x_o, \phi)
+    \equiv
+    \frac{2 +1}{2 + 1}
+    \sum_{m_{l_i}m_{l_io}}
+    \left\langle
+        l_i m_{l_i}, \lambda m_{\lambda} \big\vert l_o m_{l_o}
+    \right\rangle
+    f_{l_o m_{l_o} l_i m_{l_i}} (x_i, x_o)
+    e^{i (m_{l_i} +  m_{l_o}) \phi/2}
+\end{equation}
+and the \texbf{integrated spin decomposed matrix element},
+\begin{equation}
+    \label{def:integrated-spin-pwd}
+    O_{s_o m_{s_o} s_i m_{s_i} m_\lambda}(p_o, p_i, x_o, x_i, \phi, \vec q)
+    \equiv
+    \int_{0}^{2\pi} d \Phi \exp\left(-i m_\lambda \Phi\right)
+    \left\langle
+        \vec p_o; s_o m_{s_o}
+        \big\vert
+        \hat O(\vec p_o, \vec p_i, \vec q)
+        \big\vert
+        \vec p_i; s_i m_{s_i}
+    \right\rangle
+\end{align}
+We can compute the PWD of the operator as
+\begin{multline}\label{def:pwd}
+    O_{(l_o s_o)j_o m_{j_o} (l_i s_i)j_i m_{j_i}}(p_o, p_i, \vec{q})
+    \\ =
+    \sum\limits_{\lambda m_\lambda}
+    \sum\limits_{m_{s_o} m_{s_i}}
+    \sum\limits_{m_{l_o} m_{l_i}}
+    \left\langle
+        l_o m_{l_o}, s_o m_{s_o} \big\vert j_o m_{j_o}
+    \right\rangle
+    \left\langle
+        l_i m_{l_i}, s_i m_{s_i} \big\vert j_i m_{j_i}
+    \right\rangle
+    \left\langle
+        l_i m_{l_i}, \lambda m_{\lambda} \big\vert l_o m_{l_o}
+    \right\rangle
+    \\ \times
+    \int d x_o d x_i d \phi
+    A_{(l_o l_i)\lambda m_\lambda}(x_i, x_o, \phi)
+    O_{s_o m_{s_o} s_i m_{s_i} m_\lambda}(p_o, p_i, x_o, x_i, \phi, \vec q)
+\end{multline}
+
+\end{document}
