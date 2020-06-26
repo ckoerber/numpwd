@@ -69,8 +69,14 @@ The notebook folder specifies more details and provides examples.
 ## Install
 Install via pip
 ```bash
-pip install [-e] [--user] .
+pip install {-e} {--user} .{[gpu]}
 ```
+
+Curly brackets are optional,
+
+* `--user` installs the module for the current user only
+* `-e` symlinks this directory into your python import path, if you update the files in this repo, your imports will update too (useful for development)
+* `[gpu]` add GPU support. This requires an CUDA (NVIDIA) capable GPU.
 
 ## Authors
 * [@ckoerber](https://www.ckoerber.com).
