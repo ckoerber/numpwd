@@ -60,7 +60,7 @@ For general spin-dependent operators, array dimensions can exceed available reso
 which corresponds to `10 * 60**2 * 10 * 20**2 * 50**2 * 16B ~ 5TB` if one would try to entirely allocate this array at once.
 
 To allow computational optimizations like vectorization, this module utilizes the Wigner–Eckart theorem to reduce the number of allowed channels.
-For a large class of operators of interest, this furthermore allows to run one integration analytically (also done under the hood) such that intermediate arrays for large operators are at the size of `5GB`.
+For a large class of operators of interest, this furthermore allows to run one angular integration analytically (done under the hood) such that intermediate arrays for large operators are at the size of `5GB`.
 
 To further speed up computations, intermediate results like Clebsch-Gordan coefficients and repeated integrals are cached.
 
