@@ -35,7 +35,7 @@ which corresponds to `10 * 60**2 * 10 * 20**2 * 50**2 * 16B ~ 5TB` if one would 
 To allow computational optimizations like vectorization, this module utilizes the Wigner–Eckart theorem to reduce the number of allowed channels.
 For a large class of operators of interest, this also allows to run one integration analytically (also done under the hood) such that intermediate arrays for large operators are at the size of `5GB`.
 
-To further speed up computations, intermediate results like Clebsch-Gordan coefficients are repeated integrals are cached.
+To further speed up computations, intermediate results like Clebsch-Gordan coefficients and repeated integrals are cached.
 
 The notebook folder specifies more details and provides examples.
 
