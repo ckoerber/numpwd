@@ -22,7 +22,34 @@ It utilizes sympy to convert expressions to arrays on CPU (numpy) or GPU  (cupy)
 
 ## Details
 
-For general spin-dependent operators, array dimensions (complex numbers) can be quite large: `(c_s, p_o, p_i, q, x_o, x_i, phi_o, phi_i)`, where
+This module semi-numerically computes the partial wave decomposition of operators
+
+\begin{multline}
+    O_{(l_o s_o)j_o m_{j_o} (l_i s_i)j_i m_{j_i}}(p_o, p_i, \vec{q})
+    =
+    \sum\limits_{m_{s_o} m_{s_i}}
+    \sum\limits_{m_{l_o} m_{l_i}}
+    \left\langle
+        l_o m_{l_o}, s_o m_{s_o} \big\vert j_o m_{j_o}
+    \right\ranlge
+    \left\langle
+        l_i m_{l_i}, s_i m_{s_i} \big\vert j_i m_{j_i}
+    \right\ranlge
+    \\ \times
+    \int d x_o d x_i d \phi_o d \phi_i
+    Y_{l_o m_{l_o}}^*(x_o, \phi_o)
+    Y_{l_i m_{l_i}}(x_i, \phi_i)
+    \\ \times
+    \left\langle
+        \vec p_o; s_o m_{s_o}
+        \big\vert
+        \hat O(\vec p_o, \vec p_i, \vec q)
+        \big\vert
+        \vec p_i; s_i m_{s_i}
+    \right\rangle
+\end{multline}
+
+For general spin-dependent operators, array dimensions can exceed available resources by far. For example, arrays (complex numbers) in intermediate computations are of the shape `(c_s, p_o, p_i, q, x_o, x_i, phi_o, phi_i)`, where
 
 * `c_s` specifies the number of in and outgoing spin channels ~ 10
 * `p` specifies the momentum grid  ~ 60
@@ -33,7 +60,7 @@ For general spin-dependent operators, array dimensions (complex numbers) can be 
 which corresponds to `10 * 60**2 * 10 * 20**2 * 50**2 * 16B ~ 5TB` if one would try to entirely allocate this array at once.
 
 To allow computational optimizations like vectorization, this module utilizes the Wigner–Eckart theorem to reduce the number of allowed channels.
-For a large class of operators of interest, this also allows to run one integration analytically (also done under the hood) such that intermediate arrays for large operators are at the size of `5GB`.
+For a large class of operators of interest, this furthermore allows to run one integration analytically (also done under the hood) such that intermediate arrays for large operators are at the size of `5GB`.
 
 To further speed up computations, intermediate results like Clebsch-Gordan coefficients and repeated integrals are cached.
 
