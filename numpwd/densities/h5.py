@@ -54,8 +54,6 @@ def read_h5(filename: str) -> Density:
         "thetaval": dsets.pop(f"{name}/thetaval"),
     }
 
-    dsets.pop("maxrhoindex")
-    dsets.pop("num2Nchan")
     qn2Nchan = dsets.pop("qn2Nchan")
     rhoindx = dsets.pop("rhoindx") - 1
 

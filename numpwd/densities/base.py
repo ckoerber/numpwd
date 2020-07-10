@@ -69,13 +69,13 @@ class Density:
         if len(self.matrix.shape) != 3:
             raise ValueError("Matrix of wrong shape")
 
-        if not isinstance(self.p, ndarray) or len(self.p) != len(self.wp):
-            raise ValueError("Momentum values and weights not of same shape.")
+        if not isinstance(self.p, ndarray) or not len(self.p) == len(self.wp) > 0:
+            raise ValueError("Momentum values and weights not properly initialized.")
 
         if not len(self.p) == self.matrix.shape[1] == self.matrix.shape[2]:
             raise ValueError("Momenum vector shape does not match matrix.")
 
-        if not isinstance(self.channels, DataFrame):
+        if not isinstance(self.channels, DataFrame) or self.channels.shape[0] == 0:
             raise ValueError("Channels not initialized.")
 
         if set(self.channels.columns) != set(CHANNEL_COLUMNS):
