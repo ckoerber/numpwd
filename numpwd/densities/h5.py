@@ -12,75 +12,69 @@ from numpwd.utils.h5io import get_dsets
 from numpwd.densities.base import Density
 
 
-class H5Density(Density):
-    """Specilization of Density from H5 files provided by Andreas.
+def read_h5(filename: str) -> Density:
+    """Reads densities from h5file.
 
-    Details:
-        The channels property combines the qn2Nchan and num2Nchan arrays.
+    Arguments:
+        filename: Path and file name to file.
     """
+    if not isinstance(filename, str):
+        raise TypeError("Densities must be initialized by file name.")
 
-    filename: str = None
+    with File(filename, "r") as h5f:
+        dsets = get_dsets(h5f, load_dsets=True)
 
-    def __init__(self, filename: str):
-        """Reads densities from h5file.
+    name = None
+    for key in dsets:
+        match = search(r"(RHO_om=[\+\-0-9\.E]+_th=[\+\-0-9\.E]+)", key)
+        if match:
+            name = match.group(0)
+            break
 
-        Arguments:
-            h5file: Path and file name to file.
-        """
-        self.filename = filename
+    if not name:
+        raise KeyError("Could not locate rho group.")
 
-        if not isinstance(filename, str):
-            raise TypeError("Densities must be initialized by file name.")
+    density = Density()
 
-        with File(filename, "r") as h5f:
-            dsets = get_dsets(h5f, load_dsets=True)
+    density.matrix = dsets.pop(f"{name}/RHO")
+    density.p = dsets.pop("p12p")
+    density.wp = dsets.pop("p12w")
 
-        name = None
-        for key in dsets:
-            match = search(r"(RHO_om=[\+\-0-9\.E]+_th=[\+\-0-9\.E]+)", key)
-            if match:
-                name = match.group(0)
-                break
+    density.mesh_info = {
+        "meshtype": "".join(map(lambda el: el.decode(), dsets.pop("meshtype")))
+    }
+    if density.mesh_info["meshtype"] == "TRNS":
+        for key in ["n1", "n2", "ntot", "p1", "p2", "p3"]:
+            density.mesh_info[key] = dsets.pop(f"p12{key}")
 
-        if not name:
-            raise KeyError("Could not locate rho group.")
+    density.current_info = {
+        "qval": dsets.pop(f"{name}/qval"),
+        "omval": dsets.pop(f"{name}/omval"),
+        "thetaqval": dsets.pop(f"{name}/thetaqval"),
+        "thetaval": dsets.pop(f"{name}/thetaval"),
+    }
 
-        self.matrix = dsets.pop(f"{name}/RHO")
-        self.p = dsets.pop("p12p")
-        self.wp = dsets.pop("p12w")
+    dsets.pop("maxrhoindex")
+    dsets.pop("num2Nchan")
+    qn2Nchan = dsets.pop("qn2Nchan")
+    rhoindx = dsets.pop("rhoindx") - 1
 
-        self.mesh_info = {
-            "meshtype": "".join(map(lambda el: el.decode(), dsets.pop("meshtype")))
-        }
-        if self.mesh_info["meshtype"] == "TRNS":
-            for key in ["n1", "n2", "ntot", "p1", "p2", "p3"]:
-                self.mesh_info[key] = dsets.pop(f"p12{key}")
+    density.jx2 = int(qn2Nchan.T[-1].max())
 
-        self.current_info = {
-            "qval": dsets.pop(f"{name}/qval"),
-            "omval": dsets.pop(f"{name}/omval"),
-            "thetaqval": dsets.pop(f"{name}/thetaqval"),
-            "thetaval": dsets.pop(f"{name}/thetaval"),
-        }
+    data = []
+    columns = ["l", "s", "j", "t", "mt", "mj", "mjtotx2"]
+    cols_o = list(map(lambda el: f"{el}_o", columns))
+    cols_i = list(map(lambda el: f"{el}_i", columns))
+    for (id_o, c_o), (id_i, c_i) in product(
+        *[enumerate(qn2Nchan), enumerate(qn2Nchan)]
+    ):
+        channel = dict(zip(cols_o, c_o))
+        channel.update(dict(zip(cols_i, c_i)))
+        channel["id"] = rhoindx[id_o, id_i]
+        data.append(channel)
+    density.channels = DataFrame(data).query("id != -1").set_index("id").sort_index()
 
-        dsets.pop("maxrhoindex")
-        dsets.pop("num2Nchan")
-        qn2Nchan = dsets.pop("qn2Nchan")
-        rhoindx = dsets.pop("rhoindx") - 1
+    density.misc = dsets
+    density.misc["filename"] = filename
 
-        self.jx2 = int(qn2Nchan.T[-1].max())
-
-        data = []
-        columns = ["l", "s", "j", "t", "mt", "mj", "mjtotx2"]
-        cols_o = list(map(lambda el: f"{el}_o", columns))
-        cols_i = list(map(lambda el: f"{el}_i", columns))
-        for (id_o, c_o), (id_i, c_i) in product(
-            *[enumerate(qn2Nchan), enumerate(qn2Nchan)]
-        ):
-            channel = dict(zip(cols_o, c_o))
-            channel.update(dict(zip(cols_i, c_i)))
-            channel["id"] = rhoindx[id_o, id_i]
-            data.append(channel)
-        self.channels = DataFrame(data).query("id != -1").set_index("id").sort_index()
-
-        self.misc = dsets
+    return density
