@@ -1,63 +1,39 @@
 """Abstract implementation of densities."""
 from typing import Dict
-from abc import ABC, abstractmethod
+from abc import ABCMeta
 
 from numpy import ndarray
 from pandas import DataFrame
 
 
-class Density(ABC):
+class Density(metaclass=ABCMeta):
     """Abstract implementation of densities."""
 
+    #: Additional information
     misc: Dict[str, float] = dict()
 
-    @property
-    @abstractmethod
-    def jx2(self) -> int:
-        """Returns total spin of the Density."""
-        pass
+    #: Returns total spin of the Density.
+    jx2: int = None
 
-    @property
-    @abstractmethod
-    def matrix(self) -> ndarray:
-        """Returns operator matrix.
+    #: Returns operator matrix.
+    #:  The first index represents the collective channel, the second the out momentum
+    #:  and the third th in momentum.
+    matrix: ndarray = None
 
-        The first index represents the collective channel, the second the out momentum
-        and the third th in momentum.
-        """
-        pass
+    #: Momentum mesh of the oparator (1-D).
+    p: ndarray = None
 
-    @property
-    @abstractmethod
-    def p(self) -> ndarray:
-        """Momentum mesh of the oparator (1-D)."""
-        pass
+    #: Momentum mesh weigths of the oparator (1-D).
+    wp: ndarray = None
 
-    @property
-    @abstractmethod
-    def wp(self) -> ndarray:
-        """Momentum mesh weigths of the oparator (1-D)."""
-        pass
+    #: Additional infos about the mesh to reproduce it.
+    mesh_info: Dict[str, float] = None
 
-    @property
-    @abstractmethod
-    def mesh_info(self) -> Dict[str, float]:
-        """Additional infos about the mesh to reproduce it."""
-        pass
+    #: Additional infos about the external current momentum.
+    current_info: Dict[str, float] = None
 
-    @property
-    @abstractmethod
-    def current_info(self) -> Dict[str, float]:
-        """Additional infos about the external current momentum."""
-        pass
-
-    @property
-    @abstractmethod
-    def channels(self) -> DataFrame:
-        """In and out channels of the Density.
-
-        Must provide "l", "s", "j", "t", "mt", "mj", "mjtotx2" with suffix '_i' and '_o'
-        for in and outgoing quantum numbers. Index is the index to the matrix first
-        dimension.
-        """
-        pass
+    #: In and out channels of the Density.
+    #:  Must provide "l", "s", "j", "t", "mt", "mj", "mjtotx2" with suffix '_i' and '_o'
+    #:  for in and outgoing quantum numbers. Index is the index to the matrix first
+    #:  dimension.
+    channels: DataFrame = None
