@@ -1,5 +1,5 @@
 """Abstract implementation of densities."""
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 from dataclasses import dataclass, field
 
 from numpy import array, ndarray
@@ -19,40 +19,32 @@ CHANNEL_COLUMNS = [
 ]
 
 
-@dataclass
+@dataclass(repr=None)
 class Operator:
     """Implementation of external operators."""
 
     #: Returns operator matrix.
     #:  The first index represents the collective channel, the second the out momentum,
     #:  the third the in momentum and the last the external momentum.
-    matrix: ndarray = field(repr=None, default_factory=lambda: array([]))
+    matrix: ndarray = field(default_factory=lambda: array([]))
 
     #: isospin matrix of operator for spin-0 and spin-1 systems.
     #   Keys correspond to (t_o, mt_o, ti, mt_i)
-    isospin: Dict[Tuple[int, int, int, int], float] = field(
-        default_factory=dict, repr=None
-    )
+    isospin: Dict[Tuple[int, int, int, int], float] = field(default_factory=dict)
 
-    #: Momentum mesh of the oparator (1-D).
-    p: ndarray = field(repr=None, default_factory=lambda: array([]))
-
-    #: Momentum mesh weigths of the oparator (1-D).
-    wp: ndarray = field(repr=None, default_factory=lambda: array([]))
+    #: Arguments of the opertor tensor (e.g., [("p_o", [1,2,3,4]), ...]).
+    args: List[Tuple[str, ndarray]] = field(default_factory=list)
 
     #: In and out channels of the Density.
     #:  Must provide "l", "s", "j", "mj", "ms_ex" with suffix '_i' and '_o'
     #:  for in and outgoing quantum numbers. Index is the index to the matrix first
     #:  dimension.
     channels: DataFrame = field(
-        repr=None, default_factory=lambda: DataFrame(data=[], columns=CHANNEL_COLUMNS)
+        default_factory=lambda: DataFrame(data=[], columns=CHANNEL_COLUMNS)
     )
 
-    #: Additional infos about the momentum mesh to reproduce it.
+    #: Additional infos about all utilized meshes to reproduce them.
     mesh_info: Dict[str, float] = field(default_factory=dict)
-
-    #: Additional infos about the external current momentum.
-    current_info: Dict[str, float] = field(default_factory=dict)
 
     #: Additional information not directly needed for the computation
     misc: Dict[str, float] = field(default_factory=dict)
@@ -62,14 +54,8 @@ class Operator:
         if not isinstance(self.matrix, ndarray) or len(self.matrix) == 0:
             raise ValueError("Matrix was not initialized")
 
-        if len(self.matrix.shape) != 4:
+        if len(self.matrix.shape) != len(self.args) + 1:
             raise ValueError("Matrix of wrong shape")
-
-        if not isinstance(self.p, ndarray) or not len(self.p) == len(self.wp) > 0:
-            raise ValueError("Momentum values and weights not properly initialized.")
-
-        if not len(self.p) == self.matrix.shape[1] == self.matrix.shape[2]:
-            raise ValueError("Momenum vector shape does not match matrix.")
 
         if not isinstance(self.channels, DataFrame) or self.channels.shape[0] == 0:
             raise ValueError("Channels not initialized.")
@@ -79,6 +65,12 @@ class Operator:
 
         if self.channels.shape[0] != self.matrix.shape[0]:
             raise ValueError("Channel shape does not match matrix shape.")
+
+        for n, (key, val) in enumerate(self.args):
+            if len(val) != self.matrix.shape[1 + n]:
+                raise ValueError(
+                    f"Operator argument {key} shape does not match matrix shape."
+                )
 
         if not self.isospin:
             raise KeyError("Isospin matrix is empty")

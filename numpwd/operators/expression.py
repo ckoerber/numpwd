@@ -1,68 +1,53 @@
 """Compute operators from expression."""
 from typing import List, Dict, Union, Optional, Tuple
 from functools import lru_cache
+from itertools import product
 
-from numpy import ndarray, abs
-from pandas import Series
+from numpy import ndarray, abs, array
+from pandas import DataFrame
 from sympy import S, Function
 
-from numpwd.operators.base import Operator
+from numpwd.operators.base import Operator, CHANNEL_COLUMNS
 from numpwd.integrate.analytic import integrate
-from numpwd.integrate.angular import ReducedAngularPolynomial
+from numpwd.integrate.angular import ReducedAngularPolynomial, get_x_mesh, get_phi_mesh
 from numpwd.integrate.numeric import ExpressionMap
+from numpwd.qchannels.cg import get_cg, get_j_range
+from numpwd.qchannels.lsj import get_m_range
+
 
 CG = Function("CG")
 FACT = CG("l_o", "ml_o", "s_o", "ms_o", "j_o", "mj_o")
 FACT *= CG("l_i", "ml_i", "s_i", "ms_i", "j_i", "mj_i")
-FACT *= CG("l_i", "ml_i", "la", "m_la", "l_o", "ml_o")
-
-
-def _group_agg_rank_project_lambda(
-    df, m_lambda_max=2, pwd_fact_lambda=S("exp(-I*(m_lambda)*Phi)")
-):
-    data = dict()
-    # sum over ms nuc
-    for row in df.to_dict("records"):
-        # Save results for unique ms DM, s nuc m_lambda
-        for m_lambda in range(-m_lambda_max, m_lambda_max + 1):
-            out = data.get(m_lambda, S(0))
-            data[m_lambda] = out + row["val"] * pwd_fact_lambda.subs(
-                {**row, "m_lambda": m_lambda}
-            )
-
-    # Run angular integrations
-    for key, val in data.items():
-        data[key] = integrate(val, ("Phi", 0, "2*pi"))
-
-    out = Series(data, name="val")
-    out.index.name = m_lambda
-    return out
+FACT *= CG("l_i", "ml_i", "la", "mla", "l_o", "ml_o")
 
 
 class Integrator:
+    """Wrapper class for running angular integrations for given expression."""
+
     def __init__(
         self,
         red_ang_poly: ReducedAngularPolynomial,
-        mesh: List[Tuple[str, ndarray]],
+        args: List[Tuple[str, ndarray]],
         m_lambda_max: Optional[int] = None,
         pwd_fact_lambda: Optional[S] = None,
         use_cache: bool = True,
         numeric_zero: float = 1.0e-14,
         real_only: bool = True,
     ):
+        """Initialize angular ingrator with given mesh."""
         self.poly = red_ang_poly
         self._func = self._integrated_cached if use_cache else self._integrate
         self.pwd_fact_lambda = (
-            pwd_fact_lambda if pwd_fact_lambda is not None else S("exp(-I*(m_la)*Phi)")
+            pwd_fact_lambda if pwd_fact_lambda is not None else S("exp(-I*(mla)*Phi)")
         )
         self.m_lambda_max = (
             m_lambda_max if m_lambda_max is not None else self.poly.lmax * 2
         )
         angular_keys = ("x_o", "x_i", "phi")
-        self._mesh_args = tuple([key for key, _ in mesh if key not in angular_keys])
-        self._mesh_values = tuple([val for key, val in mesh if key not in angular_keys])
-        self._mesh_args += angular_keys
-        self._mesh_values += (self.poly.x, self.poly.x, self.poly.phi)
+        self._args = tuple([key for key, _ in args if key not in angular_keys])
+        self._values = tuple([val for key, val in args if key not in angular_keys])
+        self._args += angular_keys
+        self._values += (self.poly.x, self.poly.x, self.poly.phi)
         self.numeric_zero = numeric_zero
         self.real_only = real_only
 
@@ -70,15 +55,16 @@ class Integrator:
         data = []
         for m_lambda in range(-self.m_lambda_max, self.m_lambda_max + 1):
             big_phi_integrated = integrate(
-                expr * self.pwd_fact_lambda.subs({"m_la": m_lambda}), ("Phi", 0, "2*pi")
+                expr * self.pwd_fact_lambda.subs({"mla": m_lambda}), ("Phi", 0, "2*pi")
             )
             if big_phi_integrated:
-                fcn = ExpressionMap(big_phi_integrated, self._mesh_args)
-                tensor = fcn(*self._mesh_values)
+                fcn = ExpressionMap(big_phi_integrated, self._args)
+                tensor = fcn(*self._values)
                 res = self.poly.integrate(tensor, m_lambda)
             else:
                 res = dict()
             for (l_o, l_i, la, mla), matrix in res.items():
+
                 if all(abs(matrix) < self.numeric_zero):
                     continue
                 if self.real_only:
@@ -106,16 +92,19 @@ class Integrator:
         return self._integrate(expr)
 
     def __call__(self, expr):
+        """Integrates out all angular dependence of expression."""
         return self._func(expr)
 
 
 def get_pwd_operator(
     spin_momentum_expressions: List[Dict[str, Union[int, S]]],
     isospin_expressions: List[Dict[str, Union[int, S]]],
+    args: List[Tuple[str, ndarray]],
+    nx: int,
+    nphi: int,
     lmax: int,
     m_lambda_max: Optional[int] = None,
     cache_integral: bool = True,
-    **mesh_info,
 ) -> Operator:
     """Run partial wave decomposition of two-nucleon operator from expression.
 
@@ -123,7 +112,7 @@ def get_pwd_operator(
         spin_momentum_expressions: List of spin matrix elements (dicts) which must have
             the keys ["s_o", "ms_o", "s_i", "ms_i", "expr"] where the spin values range
             from 0..1 for s and -1..1 for ms values. The expr key is a sympy expression
-            containing ponly symbols for "p_o", "p_i", "q", "x_i", "x_o", "phi" and "Phi".
+            containing only symbols for "p_o", "p_i", "q", "x_i", "x_o", "phi" and "Phi".
 
         isospin_expression: List of isospin matrix elements (dicts) which must have
             the keys ["t_o", "mt_o", "t_i", "mt_i", "expr"].
@@ -134,36 +123,58 @@ def get_pwd_operator(
             "phi", "wphi".
     """
     # check arguments
-    for el in spin_momentum_expressions:
-        if not set(["s_o", "ms_o", "s_i", "ms_i", "expr"]) - set(el.keys()):
+    #   Check spin
+    spe = spin_momentum_expressions.copy()
+    required_spin_keys = set(
+        ["s_o", "ms_o", "s_i", "ms_i", "ms_ex_o", "ms_ex_i", "expr"]
+    )
+    for el in spe:
+        if required_spin_keys != set(el.keys()):
             raise KeyError(
-                f"Spin element {el} does not provide all required spin keys."
-            )
-    for el in isospin_expression:
-        if not set(["t_o", "mt_o", "t_i", "mt_i", "expr"]) - set(el.keys()):
-            raise KeyError(
-                f"Spin element {el} does not provide all required spin keys."
+                f"Spin element {el} does not provide all required spin keys"
+                f" ({required_spin_keys})."
             )
 
+    #   Check isospin
+    ie = isospin_expressions.copy()
+    iso_mat = {}
+    required_isospin_keys = set(["t_o", "mt_o", "t_i", "mt_i", "expr"])
+    for el in ie:
+        if required_isospin_keys != set(el.keys()):
+            raise KeyError(
+                f"Spin element {el} does not provide all required spin keys."
+            )
+        iso_mat[(["t_o"], ["mt_o"], ["t_i"], ["mt_i"])] = float(el["expr"])
+
+    # Allocate integration class
+    angular_info = {}
+    angular_info["x"], angular_info["wx"] = get_x_mesh(nx)
+    angular_info["phi"], angular_info["wphi"] = get_phi_mesh(nphi)
+    red_ang_poly = ReducedAngularPolynomial(**angular_info, lmax=lmax)
     m_lambda_max = m_lambda_max if m_lambda_max is not None else 2 * lmax
-    integrator = Integrator(m_lambda_max=m_lambda_max, use_cache=cache_integral)
+    integrator = Integrator(
+        red_ang_poly=red_ang_poly,
+        args=args,
+        m_lambda_max=m_lambda_max,
+        use_cache=cache_integral,
+    )
 
     data = dict()
-    for spin_channel in sorted_channels:
+    for spin_channel in sorted(spe, key=lambda el: el["expr"]):
         for angular_channel in integrator(spin_channel.pop("expr")):
             ranges = {
-                "j_o": get_j_range(spin_channel["s_o"], spin_channel["l_o"]),
-                "j_i": get_j_range(spin_channel["s_i"], spin_channel["l_i"]),
-                "ml_o": get_m_range(spin_channel["l_o"]),
+                "j_o": get_j_range(spin_channel["s_o"], angular_channel["l_o"]),
+                "j_i": get_j_range(spin_channel["s_i"], angular_channel["l_i"]),
+                "ml_o": get_m_range(angular_channel["l_o"]),
             }
             # sum over all m_s, m_l and collect by j m_j
             for vals in product(*ranges.values()):
                 pars = dict(zip(ranges.keys(), vals))
                 pars.update(spin_channel)
                 pars.update(angular_channel)
-                pars["m_lambda"] = pars.pop("m_lambda")
-                pars["lambda"] = pars.pop("lambda")
-                pars["ml_i"] = pars["ml_o"] - pars["m_la"]
+                pars["mla"] = pars.pop("m_lambda")
+                pars["la"] = pars.pop("lambda")
+                pars["ml_i"] = pars["ml_o"] - pars["mla"]
                 pars["mj_i"] = pars["ml_i"] + pars["ms_i"]
                 pars["mj_o"] = pars["ml_o"] + pars["ms_o"]
                 if abs(pars["ml_i"]) > pars["l_i"]:
@@ -173,13 +184,25 @@ def get_pwd_operator(
                 if abs(pars["mj_o"]) > pars["j_o"]:
                     continue
 
-                key = (pars["j_o"], pars["j_i"], pars["mj_o"], pars["mj_i"])
-                tmp = data.get(key, S(0))
-                data[key] = (
+                channel = (pars.get(key) for key in CHANNEL_COLUMNS)
+                tmp = data.get(channel, 0)
+                data[channel] = (
                     tmp
                     + float(FACT.subs(pars).replace(CG, get_cg))
                     * angular_channel["matrix"]
                 )
 
-    channels = data.keys()
-    matrix = np.array(data.values())
+    operator = Operator()
+    operator.channels = DataFrame(data=data.keys(), columns=CHANNEL_COLUMNS)
+    operator.matrix = array(list(data.values()))
+    operator.isospin = iso_mat
+    operator.args = args
+    operator.mesh_info = angular_info
+    operator.misc = {
+        "lmax": lmax,
+        "m_lambda_max": m_lambda_max,
+        "spin_momentum_expressions": spe,
+        "isospin_expressions": ie,
+    }
+
+    return operator
