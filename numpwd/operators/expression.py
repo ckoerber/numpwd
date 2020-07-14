@@ -1,17 +1,20 @@
 """Compute operators from expression."""
-from typing import List, Dict, Union, Optional
+from typing import List, Dict, Union, Optional, Tuple
 from functools import lru_cache
 
+from numpy import ndarray, abs
 from pandas import Series
 from sympy import S, Function
 
 from numpwd.operators.base import Operator
 from numpwd.integrate.analytic import integrate
+from numpwd.integrate.angular import ReducedAngularPolynomial
+from numpwd.integrate.numeric import ExpressionMap
 
 CG = Function("CG")
 FACT = CG("l_o", "ml_o", "s_o", "ms_o", "j_o", "mj_o")
 FACT *= CG("l_i", "ml_i", "s_i", "ms_i", "j_i", "mj_i")
-FACT *= CG("l_i", "ml_i", "lambda", "m_lambda", "l_o", "ml_o")
+FACT *= CG("l_i", "ml_i", "la", "m_la", "l_o", "ml_o")
 
 
 def _group_agg_rank_project_lambda(
@@ -39,31 +42,53 @@ def _group_agg_rank_project_lambda(
 class Integrator:
     def __init__(
         self,
-        red_ang_poly,
+        red_ang_poly: ReducedAngularPolynomial,
+        mesh: List[Tuple[str, ndarray]],
         m_lambda_max: Optional[int] = None,
         pwd_fact_lambda: Optional[S] = None,
         use_cache: bool = True,
+        numeric_zero: float = 1.0e-14,
+        real_only: bool = True,
     ):
         self.poly = red_ang_poly
         self._func = self._integrated_cached if use_cache else self._integrate
         self.pwd_fact_lambda = (
-            pwd_fact_lambda
-            if pwd_fact_lambda is not None
-            else S("exp(-I*(m_lambda)*Phi)")
+            pwd_fact_lambda if pwd_fact_lambda is not None else S("exp(-I*(m_la)*Phi)")
         )
         self.m_lambda_max = (
             m_lambda_max if m_lambda_max is not None else self.poly.lmax * 2
         )
+        angular_keys = ("x_o", "x_i", "phi")
+        self._mesh_args = tuple([key for key, _ in mesh if key not in angular_keys])
+        self._mesh_values = tuple([val for key, val in mesh if key not in angular_keys])
+        self._mesh_args += angular_keys
+        self._mesh_values += (self.poly.x, self.poly.x, self.poly.phi)
+        self.numeric_zero = numeric_zero
+        self.real_only = real_only
 
     def _integrate(self, expr):
         data = []
         for m_lambda in range(-self.m_lambda_max, self.m_lambda_max + 1):
             big_phi_integrated = integrate(
-                expr * self.pwd_fact_lambda, ("Phi", 0, "2*pi")
+                expr * self.pwd_fact_lambda.subs({"m_la": m_lambda}), ("Phi", 0, "2*pi")
             )
-            tensor = ExpressionMap(big_phi_integrated, ("x_o", "x_i", "phi"))
-            res = self.poly.integrate(m_lambda, tensor)
-            for (l_o, l_i, la, mla), val in res.items():
+            if big_phi_integrated:
+                fcn = ExpressionMap(big_phi_integrated, self._mesh_args)
+                tensor = fcn(*self._mesh_values)
+                res = self.poly.integrate(tensor, m_lambda)
+            else:
+                res = dict()
+            for (l_o, l_i, la, mla), matrix in res.items():
+                if all(abs(matrix) < self.numeric_zero):
+                    continue
+                if self.real_only:
+                    if any(abs(matrix.imag) > self.numeric_zero):
+                        raise AssertionError(
+                            "Specified to return real data but imag of components for"
+                            f" l_o={l_o}, l_i={l_i}, lambda={la}, m_lambda={mla}"
+                            " not numericaly zero."
+                        )
+                    matrix = matrix.real
 
                 data.append(
                     {
@@ -80,13 +105,13 @@ class Integrator:
     def _integrated_cached(self, expr):
         return self._integrate(expr)
 
-    def __call(self, expr):
+    def __call__(self, expr):
         return self._func(expr)
 
 
 def get_pwd_operator(
     spin_momentum_expressions: List[Dict[str, Union[int, S]]],
-    isospin_expression: List[Dict[str, Union[int, S]]],
+    isospin_expressions: List[Dict[str, Union[int, S]]],
     lmax: int,
     m_lambda_max: Optional[int] = None,
     cache_integral: bool = True,
