@@ -5,15 +5,15 @@ from typing import Iterable, Generator, Dict, Optional, List, Callable, Tuple
 
 from itertools import product
 
-from numpwd.qchannels.cg import get_cg, Number
+from numpwd.qchannels.cg import get_cg, Number, is_int
 
 
-def m_range(j: int) -> Iterable[int]:
-    """Computes the range of allowed m quantum numbers for given j input
+def get_m_range(j: int) -> Iterable[int]:
+    """Computes the range of allowed m quantum numbers for given j input.
 
     Asserts j is an integer laerger equal zero
     """
-    assert isinstance(j, int) and j >= 0
+    assert is_int(j) and j >= 0
     return range(-j, j + 1)
 
 
@@ -44,7 +44,7 @@ def get_two_n_channels(
 
     channels = []
     for l, s, j in product(*map(range, [l_max + 1, s_max + 1, j_max + 1])):
-        for ml, ms, mj in product(*map(m_range, [l, s, j])):
+        for ml, ms, mj in product(*map(get_m_range, [l, s, j])):
 
             cg = get_cg(l, ml, s, ms, j, mj, numeric=numeric)
             if abs(cg) > 1.0e-7:

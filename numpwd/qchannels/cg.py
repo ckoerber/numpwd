@@ -1,7 +1,7 @@
 # pylint:disable=C0103
 """Cached version of sympys cg functions
 """
-from typing import Union
+from typing import Union, Iterable
 from functools import lru_cache
 
 from numpy import issubdtype, integer
@@ -10,6 +10,16 @@ from sympy import Number as SympyNumber
 from sympy.physics.quantum.cg import CG
 
 Number = Union[int, float, SympyNumber]
+
+
+def get_j_range(j1: int, j2: int) -> Iterable[int]:
+    """Computes the range of allowed j quantum numbers for given j input.
+
+    Asserts j1, j2 is an integer laerger equal zero
+    """
+    assert is_int(j1) and j1 >= 0
+    assert is_int(j2) and j2 >= 0
+    return range(abs(j1 - j2), j1 + j2 + 1)
 
 
 class QuantumNumberError(Exception):
