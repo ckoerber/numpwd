@@ -96,7 +96,7 @@ class Integrator:
         return self._func(expr)
 
 
-def get_pwd_operator(
+def integrate_spin_decomposed_operator(
     spin_momentum_expressions: List[Dict[str, Union[int, S]]],
     isospin_expressions: List[Dict[str, Union[int, S]]],
     args: List[Tuple[str, ndarray]],
@@ -105,8 +105,10 @@ def get_pwd_operator(
     lmax: int,
     m_lambda_max: Optional[int] = None,
     cache_integral: bool = True,
+    numeric_zero: float = 1.0e-14,
+    real_only: bool = True,
 ) -> Operator:
-    """Run partial wave decomposition of two-nucleon operator from expression.
+    """Runs all angular integrals against spin decomposed two-nucleon operator.
 
     Arguments:
         spin_momentum_expressions: List of spin matrix elements (dicts) which must have
@@ -157,10 +159,13 @@ def get_pwd_operator(
         args=args,
         m_lambda_max=m_lambda_max,
         use_cache=cache_integral,
+        real_only=real_only,
+        numeric_zero=numeric_zero,
     )
 
-    data = dict()
-    for spin_channel in sorted(spe, key=lambda el: el["expr"]):
+    tmp = dict()
+    for spin_channel in spe:
+        spin_channel = spin_channel.copy()
         for angular_channel in integrator(spin_channel.pop("expr")):
             ranges = {
                 "j_o": get_j_range(spin_channel["s_o"], angular_channel["l_o"]),
@@ -184,17 +189,25 @@ def get_pwd_operator(
                 if abs(pars["mj_o"]) > pars["j_o"]:
                     continue
 
-                channel = (pars.get(key) for key in CHANNEL_COLUMNS)
-                tmp = data.get(channel, 0)
-                data[channel] = (
-                    tmp
-                    + float(FACT.subs(pars).replace(CG, get_cg))
-                    * angular_channel["matrix"]
-                )
+                fact = float(FACT.subs(pars).replace(CG, get_cg))
+                if abs(fact) < numeric_zero:
+                    continue
+
+                channel = tuple(pars.get(key) for key in CHANNEL_COLUMNS)
+                tmp[channel] = tmp.get(channel, 0) + fact * angular_channel["matrix"]
+
+    # Sort and remove channels which cancel
+    matrix = []
+    channels = []
+    for channel in sorted(tmp):
+        mat = tmp[channel]
+        if any(abs(mat) > numeric_zero):
+            channels.append(channel)
+            matrix.append(mat)
 
     operator = Operator()
-    operator.channels = DataFrame(data=data.keys(), columns=CHANNEL_COLUMNS)
-    operator.matrix = array(list(data.values()))
+    operator.channels = DataFrame(data=channels, columns=CHANNEL_COLUMNS)
+    operator.matrix = array(matrix)
     operator.isospin = iso_mat
     operator.args = args
     operator.mesh_info = angular_info
@@ -203,6 +216,9 @@ def get_pwd_operator(
         "m_lambda_max": m_lambda_max,
         "spin_momentum_expressions": spe,
         "isospin_expressions": ie,
+        "cache_integral": cache_integral,
+        "numeric_zero": numeric_zero,
+        "real_only": real_only,
     }
 
     return operator
