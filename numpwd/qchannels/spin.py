@@ -224,7 +224,7 @@ def expression_to_matrix_spin_half(
 def expression_to_matrix_ex(
     op_expression: Union[str, Symbol],
     pauli_symbol: str = "sigma",
-    pauli_label: str = "_ex",
+    ex_label: str = "_ex",
 ) -> Dict[Tuple[Symbol, Symbol], Dict[Tuple[Symbol, Symbol, Symbol, Symbol], Number]]:
     """Converts pauli matrix expression to matrix element in spin subsystem.
 
@@ -239,7 +239,7 @@ def expression_to_matrix_ex(
             pauli matrix label (e.g., ex for extern) and the second to the
             matrix component (0 <-> id).
         pauli_symbol: The symbol which specifies the pauli matrix.
-        pauli_label: Label specifying which matrix to replace.
+        ex_label: Label specifying the external spin matrix.
 
     Returns:
         Dictionary with keys (ms2_out, ms1_out, ms1_in, ms2_in) and values corresponding
@@ -269,7 +269,7 @@ def expression_to_matrix_ex(
 
     matrix = {}
     for ex_key, expr in expression_to_matrix_spin_half(
-        op_expression, pauli_symbol=pauli_symbol, pauli_label=pauli_label
+        op_expression, pauli_symbol=pauli_symbol, pauli_label=ex_label
     ).items():
         if expr:
             matrix[ex_key] = expression_to_matrix(expr, pauli_symbol=pauli_symbol)
@@ -320,7 +320,7 @@ def get_spin_matrix_element(
 
 
 def get_spin_matrix_element_ex(
-    expr: Symbol, pauli_symbol: str = "sigma", pauli_label: str = "_ex"
+    expr: Symbol, pauli_symbol: str = "sigma", ex_label: str = "_ex"
 ) -> List[Dict[str, Number]]:
     r"""Converts sympy expression containing pauli matrices to a spin decomposed matrix element.
 
@@ -331,6 +331,7 @@ def get_spin_matrix_element_ex(
     Arguments:
         expr: Expression containing pauli matrices.
         pauli_symbol: The symbol name representing the pauli matrix.
+        ex_label: Label specifying the external spin matrix.
 
     Details:
         The syntax for pauli matrices is
@@ -344,18 +345,11 @@ def get_spin_matrix_element_ex(
     """
     tmp = {}
     for key_ex, mat in expression_to_matrix_ex(
-        expr, pauli_symbol=pauli_symbol, pauli_label=pauli_label
+        expr, pauli_symbol=pauli_symbol, ex_label=ex_label
     ).items():
         for key_nuc, expr in pauli_contract_subsystem(mat).items():
             tmp[key_ex + key_nuc] = expr
     return dict_to_data(
         tmp,
-        columns=[
-            f"ms{pauli_label}_o",
-            f"ms{pauli_label}_i",
-            "s_o",
-            "ms_o",
-            "s_i",
-            "ms_i",
-        ],
+        columns=[f"ms{ex_label}_o", f"ms{ex_label}_i", "s_o", "ms_o", "s_i", "ms_i",],
     )
