@@ -92,7 +92,7 @@ def project_op(
     out_key: str,
     in_key: str,
     m_key: str = "m{key}",
-    val_key: str = "val",
+    value_key: str = "expr",
 ) -> Dict[Tuple[int, int, int, int], Number]:
     r"""Projects operator onto its partial wave ranks
 
@@ -101,7 +101,7 @@ def project_op(
         out_key: Name of the key for j_o
         in_key: Name of the key for j_i
         m_key: How to obtain m_key names for j key names
-        val_key: Operator matrix element
+        value_key: Operator matrix element
 
     Returns:
         Dictionary for op decomposed matrix element. Keys are (j_o, j_i, j, m_j).
@@ -127,7 +127,7 @@ def project_op(
                 continue
 
             val = (
-                entry[val_key]
+                entry[value_key]
                 * (2 * jj + 1)
                 / (2 * jo + 1)
                 * get_cg(ji, mi, jj, mj, jo, mo)

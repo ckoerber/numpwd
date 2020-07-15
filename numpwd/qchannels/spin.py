@@ -278,7 +278,9 @@ def expression_to_matrix_ex(
 
 
 def dict_to_data(
-    matrix: Dict[Tuple[Symbol, Symbol, Symbol, Symbol], Number], columns: List[str]
+    matrix: Dict[Tuple[Symbol, Symbol, Symbol, Symbol], Number],
+    columns: List[str],
+    value_key: str = "val",
 ) -> List[Dict[str, Symbol]]:
     """Converts operator maps to list of entries
     """
@@ -287,7 +289,7 @@ def dict_to_data(
 
     for keys, val in matrix.items():
         data.append(dict(zip(columns, keys)))
-        data[-1]["val"] = val
+        data[-1][value_key] = val
 
     return data
 
@@ -316,7 +318,7 @@ def get_spin_matrix_element(
     """
     mat = expression_to_matrix(expr, pauli_symbol=pauli_symbol)
     mat12 = pauli_contract_subsystem(mat)
-    return dict_to_data(mat12, columns=["s_o", "ms_o", "s_i", "ms_i"])
+    return dict_to_data(mat12, columns=["s_o", "ms_o", "s_i", "ms_i"], value_key="expr")
 
 
 def get_spin_matrix_element_ex(
@@ -351,5 +353,6 @@ def get_spin_matrix_element_ex(
             tmp[key_ex + key_nuc] = expr
     return dict_to_data(
         tmp,
-        columns=[f"ms{ex_label}_o", f"ms{ex_label}_i", "s_o", "ms_o", "s_i", "ms_i",],
+        columns=[f"ms{ex_label}_o", f"ms{ex_label}_i", "s_o", "ms_o", "s_i", "ms_i"],
+        value_key="expr",
     )

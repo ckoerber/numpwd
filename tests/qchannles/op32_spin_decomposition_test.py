@@ -13,10 +13,10 @@ LEGACY_FILE = path.join(
 def test_op32_spin_decomposition():
     """Checks if sigma_1 . sigma_2 PWD returns expected result."""
     legacy_df = read_csv(LEGACY_FILE)
-    for col in ["ms_dm_o", "ms_dm_i", "val"]:
+    for col in ["ms_dm_o", "ms_dm_i", "expr"]:
         legacy_df[col] = legacy_df[col].apply(S)
 
-    index_cols = [col for col in legacy_df.columns if col != "val"]
+    index_cols = [col for col in legacy_df.columns if col != "expr"]
     legacy_df = legacy_df.set_index(index_cols).sort_index()
 
     expr = S("(sigma_dm1 * k1 + sigma_dm2 * k2 + sigma_dm3 * k3)")

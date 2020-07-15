@@ -51,7 +51,7 @@ def fixture_legacy_decomposition():
     for col in ["ms_ex_o", "ms_ex_i"]:
         df[col] = df[col].apply(S)
 
-    return df[CHANNEL_COLUMNS + ["val"]].set_index(CHANNEL_COLUMNS).sort_index()
+    return df[CHANNEL_COLUMNS + ["matrix"]].set_index(CHANNEL_COLUMNS).sort_index()
 
 
 def test_integrate_spin_decomposed_operator(spin_decomposition, legacy_decomposition):
@@ -62,6 +62,6 @@ def test_integrate_spin_decomposed_operator(spin_decomposition, legacy_decomposi
         spin_decomposition, args=args, nx=3, nphi=7, lmax=2, numeric_zero=1.0e-8,
     )
 
-    channels["val"] = matrix.flatten()
+    channels["matrix"] = matrix.flatten()
     res = channels.set_index(CHANNEL_COLUMNS).sort_index()
     assert_frame_equal(res, legacy_decomposition)

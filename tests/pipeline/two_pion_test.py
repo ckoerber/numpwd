@@ -45,14 +45,15 @@ def fixture_two_pion_numerator_first_integral(two_pion_numerator_spin_element):
     """
     df = DataFrame(
         dict_to_data(
-            project_op(two_pion_numerator_spin_element, "s_o", "s_i"),
+            project_op(two_pion_numerator_spin_element, "s_o", "s_i", value_key="expr"),
             columns=["s_o", "s_i", "sigma", "m_sigma"],
+            value_key="expr",
         )
     )
     df["res"] = df.apply(
         lambda el: integrate(
             expand_trig(
-                el["val"].subs(SPHERICAL_BASE_SUBS).subs(ANGLE_BASE_SUBS)
+                el["expr"].subs(SPHERICAL_BASE_SUBS).subs(ANGLE_BASE_SUBS)
                 * S(f"exp(I * {el['m_sigma']} * (Phi - phi /2))")
             )
             .rewrite(S("exp"))
