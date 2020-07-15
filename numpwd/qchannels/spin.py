@@ -105,8 +105,9 @@ def pauli_contract_subsystem(
 
                 res += tres
 
+            res = res.expand().simplify()
             if res != 0:
-                op_dict[(j_out, mj_out, j_in, mj_in)] = res.expand().simplify()
+                op_dict[(j_out, mj_out, j_in, mj_in)] = res
 
     return op_dict
 
@@ -177,6 +178,105 @@ def expression_to_matrix(
     return matrix
 
 
+def expression_to_matrix_spin_half(
+    op_expression: Union[str, Symbol],
+    pauli_symbol: str = "sigma",
+    pauli_label: str = "_ex",
+) -> Dict[Tuple[Symbol, Symbol], Number]:
+    """Converts pauli matrix expression to matrix element in spin subsystem.
+
+    Computes
+        < 1/2 ms_out | expr | 1/2 ms_in >
+
+    Arguments:
+        op_expression: is a sympy expression containing pauli matrices
+            like 'tau_ex1 tau_ex1' where the first index corresponds to the
+            pauli matrix label (e.g., ex for extern) and the second to the
+            matrix component (0 <-> id).
+        pauli_symbol: The symbol which specifies the pauli matrix.
+        pauli_label: Label specifying which matrix to replace.
+
+    Returns:
+        Dictionary with keys (ms2_out, ms1_out, ms1_in, ms2_in) and values corresponding
+        to the matrix element.
+    """
+    if isinstance(op_expression, str):
+        op_expression = S(op_expression)
+
+    matrix = {}
+
+    ms_range = [S("-1/2"), S("1/2")]
+
+    for ms_out, ms_in in product(*[ms_range] * 2):
+
+        substitutions = pauli_substitution(
+            pauli_label, ms_out, ms_in, pauli_symbol=pauli_symbol
+        )
+
+        val = op_expression.subs(substitutions).simplify()
+
+        if val != 0:
+            matrix[(ms_out, ms_in)] = val
+
+    return matrix
+
+
+def expression_to_matrix_ex(
+    op_expression: Union[str, Symbol],
+    pauli_symbol: str = "sigma",
+    pauli_label: str = "_ex",
+) -> Dict[Tuple[Symbol, Symbol], Dict[Tuple[Symbol, Symbol, Symbol, Symbol], Number]]:
+    """Converts pauli matrix expression to matrix element in spin subsystem.
+
+    Computes
+        < 1/2 ms2_out |< 1/2 ms1_out | < 1/2 ms_out |
+            expr
+        | 1/2 ms_in > | 1/2 ms1_in >| 1/2 ms2_in >
+
+    Arguments:
+        op_expression: is a sympy expression containing pauli matrices
+            like 'tau_ex1 tau_ex1' where the first index corresponds to the
+            pauli matrix label (e.g., ex for extern) and the second to the
+            matrix component (0 <-> id).
+        pauli_symbol: The symbol which specifies the pauli matrix.
+        pauli_label: Label specifying which matrix to replace.
+
+    Returns:
+        Dictionary with keys (ms2_out, ms1_out, ms1_in, ms2_in) and values corresponding
+        to the matrix element.
+    """
+    """Converts pauli matrix expression to matrix element in spin subsystem.
+
+    Computes
+        < 1/2 ms2_out |< 1/2 ms1_out |< 1/2 msex_out |
+            expr
+        | 1/2 msex_in > | 1/2 ms1_in >| 1/2 ms2_in >
+
+    Arguments:
+        op_expression: is a sympy expression containing pauli matrices
+            like 'tau_ex1 tau_ex1' where the first index corresponds to the
+            pauli matrix label (e.g., ex for extern) and the second to the
+            matrix component (0 <-> id).
+        pauli_symbol: The symbol which specifies the pauli matrix.
+        pauli_label: Label specifying which matrix to replace.
+
+    Returns:
+        Dictionary with keys (ms2_out, ms1_out, ms1_in, ms2_in) and values corresponding
+        to the matrix element.
+    """
+    if isinstance(op_expression, str):
+        op_expression = S(op_expression)
+
+    matrix = {}
+    for ex_key, expr in expression_to_matrix_spin_half(
+        op_expression, pauli_symbol=pauli_symbol, pauli_label=pauli_label
+    ).items():
+        if expr:
+            matrix[ex_key] = expression_to_matrix(expr, pauli_symbol=pauli_symbol)
+
+    return matrix
+
+
 def dict_to_data(
     matrix: Dict[Tuple[Symbol, Symbol, Symbol, Symbol], Number], columns: List[str]
 ) -> List[Dict[str, Symbol]]:
@@ -217,3 +317,45 @@ def get_spin_matrix_element(
     mat = expression_to_matrix(expr, pauli_symbol=pauli_symbol)
     mat12 = pauli_contract_subsystem(mat)
     return dict_to_data(mat12, columns=["s_o", "ms_o", "s_i", "ms_i"])
+
+
+def get_spin_matrix_element_ex(
+    expr: Symbol, pauli_symbol: str = "sigma", pauli_label: str = "_ex"
+) -> List[Dict[str, Number]]:
+    r"""Converts sympy expression containing pauli matrices to a spin decomposed matrix element.
+
+    It computes < 1/2 ms_ex_o |< s_o ms_o | expr | s_i ms_i>| 1/2 ms_ex_o >
+    where the nucleon bra and ket correspond to a
+    coupled spin-1/2 system: <1/2 m1, 1/2 m2 | s ms>.
+
+    Arguments:
+        expr: Expression containing pauli matrices.
+        pauli_symbol: The symbol name representing the pauli matrix.
+
+    Details:
+        The syntax for pauli matrices is
+            < 1/2 ms_n_o | pauli_symbol{n, a} | 1/2 ms_n_i >
+        where n is the particle index and a is the pauli matrix index
+
+    Example:
+        Input: $ M = sigma_1 \cdot sigma_2$
+        -> expr = sigma11 * sigma21 + sigma12 * sigma22 + sigma13 * sigma23
+        -> < 0 0 | M | 0 0 > = -3 and < 1 ms_o | M | 1 ms_i > = 1 if ms_o == ms_i
+    """
+    tmp = {}
+    for key_ex, mat in expression_to_matrix_ex(
+        expr, pauli_symbol=pauli_symbol, pauli_label=pauli_label
+    ).items():
+        for key_nuc, expr in pauli_contract_subsystem(mat).items():
+            tmp[key_ex + key_nuc] = expr
+    return dict_to_data(
+        tmp,
+        columns=[
+            f"ms{pauli_label}_o",
+            f"ms{pauli_label}_i",
+            "s_o",
+            "ms_o",
+            "s_i",
+            "ms_i",
+        ],
+    )
