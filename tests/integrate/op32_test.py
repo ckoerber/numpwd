@@ -9,8 +9,8 @@ from pandas.testing import assert_frame_equal
 from sympy import S
 
 from numpwd.integrate.analytic import SPHERICAL_BASE_SUBS, ANGLE_BASE_SUBS
-from numpwd.operators.expression import integrate_spin_decomposed_operator
 from numpwd.operators.base import CHANNEL_COLUMNS
+from numpwd.operators.integrate import integrate_spin_decomposed_operator
 
 
 DATA_DIR = path.join(path.dirname(__file__), pardir, "data")
