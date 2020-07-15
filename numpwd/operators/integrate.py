@@ -1,4 +1,4 @@
-"""Compute operators from expression."""
+"""Compute operators from spin decomposed elements."""
 from typing import List, Dict, Union, Optional, Tuple
 from functools import lru_cache
 from itertools import product
@@ -7,7 +7,7 @@ from numpy import ndarray, abs, array
 from pandas import DataFrame
 from sympy import S, Function
 
-from numpwd.operators.base import Operator, CHANNEL_COLUMNS
+from numpwd.operators.base import CHANNEL_COLUMNS
 from numpwd.integrate.analytic import integrate
 from numpwd.integrate.angular import ReducedAngularPolynomial, get_x_mesh, get_phi_mesh
 from numpwd.integrate.numeric import ExpressionMap
@@ -98,17 +98,53 @@ class Integrator:
 
 def integrate_spin_decomposed_operator(
     spin_momentum_expressions: List[Dict[str, Union[int, S]]],
-    isospin_expressions: List[Dict[str, Union[int, S]]],
     args: List[Tuple[str, ndarray]],
     nx: int,
     nphi: int,
     lmax: int,
     m_lambda_max: Optional[int] = None,
-    cache_integral: bool = True,
+    cache_integrals: bool = True,
     numeric_zero: float = 1.0e-14,
     real_only: bool = True,
-) -> Operator:
-    """Runs all angular integrals against spin decomposed two-nucleon operator.
+) -> Tuple[DataFrame, ndarray]:
+    r"""Runs angular integrals and contracts ls to j for spin decomposed two-nucleon operator.
+
+    Computes
+    $$
+    O_{(l_o s_o)j_o m_{j_o} (l_i s_i)j_i m_{j_i}}(p_o, p_i, \\vec{q})
+    =
+    \\sum_{\\lambda m_\\lambda}
+    \\sum\\limits_{m_{s_o} m_{s_i}}
+    \\sum\\limits_{m_{l_o} m_{l_i}}
+    \\left\\langle
+        l_o m_{l_o}, s_o m_{s_o} \\big\\vert j_o m_{j_o}
+    \\right\\rangle
+    \\left\\langle
+        l_i m_{l_i}, s_i m_{s_i} \\big\\vert j_i m_{j_i}
+    \\right\\rangle
+        \\int d x_o d x_i d \\phi_o d \\phi_i
+        Y_{l_o m_{l_o}}^*(x_o, \\phi_o)
+        Y_{l_i m_{l_i}}(x_i, \\phi_i)
+        \\\\ \\times
+        \\left\\langle
+            \\vec p_o; s_o m_{s_o}
+            \\big\\vert
+            \\hat O(\\vec p_o, \\vec p_i, \\vec q)
+            \\big\\vert
+            \\vec p_i; s_i m_{s_i}
+        \\right\\rangle
+    $$
+    For spin decomposed operator (``spin_momentum_expressions``)
+    $$
+    \\left\\langle
+        \\vec p_o; s_o m_{s_o}
+        \\big\\vert
+        \\hat O(\\vec p_o, \\vec p_i, \\vec q)
+        \\big\\vert
+        \\vec p_i; s_i m_{s_i}
+    \\right\\rangle
+    $$
+    This also allows treatment of external quantum numbers.
 
     Arguments:
         spin_momentum_expressions: List of spin matrix elements (dicts) which must have
@@ -116,13 +152,44 @@ def integrate_spin_decomposed_operator(
             from 0..1 for s and -1..1 for ms values. The expr key is a sympy expression
             containing only symbols for "p_o", "p_i", "q", "x_i", "x_o", "phi" and "Phi".
 
-        isospin_expression: List of isospin matrix elements (dicts) which must have
-            the keys ["t_o", "mt_o", "t_i", "mt_i", "expr"].
+        args: Orderd list of operator arguments (not used in angular integration).
+            For example, if the operator should be evaluated at
+            ```
+            args = [
+                ("p_o", [1, 2, 3, 4])
+                ("p_i", [6, 7])
+            ]
+            ```
+            the final operator matrix will be of shape `(n_channel, 4, 2)` where where
+            ```
+            op[n_channel, 0, 1] = op(channel, 1, 7)
+            ```
+
+        nx: Number of polar mesh points.
+
+        nphi: Number of azimuthal mesh points.
 
         lmax: Highest l value to run spin decomposition for.
 
-        mesh_info: Dict containing mesh information about "p", "wp", "x", "wx",
-            "phi", "wphi".
+        m_lambda_max: Maximal absolute value of m_lambda (restricts the number of
+            m_lambda values).
+            This can be useful if the operator denominator has finite powers of momenta
+            as ``int( denominator(Phi) * exp(- I * Phi * m_lambda), (Phi, 0, 2*pi))``
+            can be zero for a select range of ``m_lambda`` values.
+            Defaults to 2 * lmax.
+
+        cache_integrals: Save intermediate integrals in memory. Speeds up computation
+            if sufficient memory is present.
+
+        numeric_zero: If all matrix elements of a given channel are smaller
+            (absolute value) than this number, the channel will be dropped.
+
+        real_only: Return real components of matrix only. Raises an error if imaginary
+            parts are larger than ``numeric_zero``.
+
+        Returns: Channels and matrix of the operator. Channels are a data frame
+            specifying which (ls)j quantum numbers correspond to which matrix entry
+            (index of df == first index of matrix).
     """
     # check arguments
     #   Check spin
@@ -137,17 +204,6 @@ def integrate_spin_decomposed_operator(
                 f" ({required_spin_keys})."
             )
 
-    #   Check isospin
-    ie = isospin_expressions.copy()
-    iso_mat = {}
-    required_isospin_keys = set(["t_o", "mt_o", "t_i", "mt_i", "expr"])
-    for el in ie:
-        if required_isospin_keys != set(el.keys()):
-            raise KeyError(
-                f"Spin element {el} does not provide all required spin keys."
-            )
-        iso_mat[(["t_o"], ["mt_o"], ["t_i"], ["mt_i"])] = float(el["expr"])
-
     # Allocate integration class
     angular_info = {}
     angular_info["x"], angular_info["wx"] = get_x_mesh(nx)
@@ -158,7 +214,7 @@ def integrate_spin_decomposed_operator(
         red_ang_poly=red_ang_poly,
         args=args,
         m_lambda_max=m_lambda_max,
-        use_cache=cache_integral,
+        use_cache=cache_integrals,
         real_only=real_only,
         numeric_zero=numeric_zero,
     )
@@ -205,20 +261,4 @@ def integrate_spin_decomposed_operator(
             channels.append(channel)
             matrix.append(mat)
 
-    operator = Operator()
-    operator.channels = DataFrame(data=channels, columns=CHANNEL_COLUMNS)
-    operator.matrix = array(matrix)
-    operator.isospin = iso_mat
-    operator.args = args
-    operator.mesh_info = angular_info
-    operator.misc = {
-        "lmax": lmax,
-        "m_lambda_max": m_lambda_max,
-        "spin_momentum_expressions": spe,
-        "isospin_expressions": ie,
-        "cache_integral": cache_integral,
-        "numeric_zero": numeric_zero,
-        "real_only": real_only,
-    }
-
-    return operator
+    return DataFrame(data=channels, columns=CHANNEL_COLUMNS), array(matrix)

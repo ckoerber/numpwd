@@ -57,20 +57,11 @@ def fixture_legacy_decomposition():
 def test_integrate_spin_decomposed_operator(spin_decomposition, legacy_decomposition):
     """Runs angular integrations of spin decomposed op against legacy data.
     """
-    isospin_decomposition = {}
     args = [("p_o", array([200])), ("p_i", array([100])), ("q_3", array([300]))]
-    op = integrate_spin_decomposed_operator(
-        spin_decomposition,
-        isospin_decomposition,
-        args=args,
-        nx=3,
-        nphi=7,
-        lmax=2,
-        numeric_zero=1.0e-8,
+    channels, matrix = integrate_spin_decomposed_operator(
+        spin_decomposition, args=args, nx=3, nphi=7, lmax=2, numeric_zero=1.0e-8,
     )
 
-    res = op.channels.copy()
-    res["val"] = op.matrix.flatten()
-    res = res.set_index(list(op.channels.columns)).sort_index()
-
+    channels["val"] = matrix.flatten()
+    res = channels.set_index(CHANNEL_COLUMNS).sort_index()
     assert_frame_equal(res, legacy_decomposition)
