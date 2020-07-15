@@ -25,5 +25,5 @@ def test_op32_spin_decomposition():
     data = get_spin_matrix_element_ex(expr, pauli_symbol="sigma", ex_label="_dm")
     df = DataFrame(data).set_index(index_cols).sort_index()
 
-    diff = (legacy_df.val - df.val).apply(simplify)
+    diff = (legacy_df["expr"] - df["expr"]).apply(simplify)
     assert all(diff == 0)

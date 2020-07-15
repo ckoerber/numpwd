@@ -35,11 +35,11 @@ def fixture_spin_decomposition():
         )
 
     df = read_csv(SPIN_DECOMPOSITION_FILE)
-    for col in ["ms_dm_o", "ms_dm_i", "val"]:
+    for col in ["ms_dm_o", "ms_dm_i", "expr"]:
         df[col] = df[col].apply(S)
 
     df = df.rename(columns={**{col: col.replace("dm", "ex") for col in df.columns}})
-    df["expr"] = df.pop("val").apply(subs_all)
+    df["expr"] = df.pop("expr").apply(subs_all)
 
     return df.to_dict("records")
 
