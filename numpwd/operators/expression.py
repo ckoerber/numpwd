@@ -44,7 +44,7 @@ def decompose_operator(
     operator = Operator()
 
     operator.misc["spin_momentum_expression"] = spin_momentum_expression
-    operator.misc["isospin_expressions"] = isospin_expression
+    operator.misc["isospin_expression"] = isospin_expression
     operator.misc["subsititutions"] = substitutions
 
     operator.misc["pauli_symbol_spin"] = spin_decomposition_kwargs.get(
