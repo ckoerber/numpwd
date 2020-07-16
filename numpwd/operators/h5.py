@@ -13,6 +13,10 @@ def prep_sympy(expr):
     return {"data": str(expr)}, {"dtype": "sympy"}
 
 
+def read_sympy(data, **kwargs):
+    return sympify(data)
+
+
 def prep_datetime(dt):
     format = "%Y-%m-%d %H:%M:%S"
     return {"data": dt.strftime(format)}, {"dtype": "datetime", "format": format}
