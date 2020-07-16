@@ -2,7 +2,7 @@
 from typing import List
 
 from numpy import ndarray
-from sympy import lambdify, Symbol, S
+from sympy import lambdify, Symbol, S, separatevars
 
 
 class ExpressionMap:  # pylint: disable=R0903
@@ -24,7 +24,7 @@ class ExpressionMap:  # pylint: disable=R0903
 
         The arguments form the tensor dimensions of the out array.
         """
-        expr = S(expr) if isinstance(expr, str) else expr
+        expr = separatevars(S(expr) if isinstance(expr, str) else expr)
 
         self.args = tuple(Symbol(key) for key in args)
         args_set = set(self.args)
