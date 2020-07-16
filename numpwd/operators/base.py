@@ -14,8 +14,6 @@ CHANNEL_COLUMNS = [
     "j_i",
     "mj_o",
     "mj_i",
-    "ms_ex_o",
-    "ms_ex_i",
 ]
 
 
@@ -36,7 +34,7 @@ class Operator:
     args: List[Tuple[str, ndarray]] = field(default_factory=list)
 
     #: In and out channels of the Density.
-    #:  Must provide "l", "s", "j", "mj", "ms_ex" with suffix '_i' and '_o'
+    #:  Must provide "l", "s", "j", "mj" with suffix '_i' and '_o'
     #:  for in and outgoing quantum numbers. Index is the index to the matrix first
     #:  dimension.
     channels: DataFrame = field(
@@ -60,7 +58,7 @@ class Operator:
         if not isinstance(self.channels, DataFrame) or self.channels.shape[0] == 0:
             raise ValueError("Channels not initialized.")
 
-        if set(self.channels.columns) != set(CHANNEL_COLUMNS):
+        if set(CHANNEL_COLUMNS) - set(self.channels.columns):
             raise KeyError("Channel columns do not contain correct keys.")
 
         if self.channels.shape[0] != self.matrix.shape[0]:

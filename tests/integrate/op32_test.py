@@ -48,10 +48,12 @@ def fixture_spin_decomposition():
 def fixture_legacy_decomposition():
     """Reads full legacy decomposition from file."""
     df = read_csv(FULL_DECOMPOSITION_FILE)
+
     for col in ["ms_ex_o", "ms_ex_i"]:
         df[col] = df[col].apply(S)
 
-    return df[CHANNEL_COLUMNS + ["matrix"]].set_index(CHANNEL_COLUMNS).sort_index()
+    index_cols = CHANNEL_COLUMNS + ["ms_ex_o", "ms_ex_i"]
+    return df[index_cols + ["matrix"]].set_index(index_cols).sort_index()
 
 
 def test_integrate_spin_decomposed_operator(spin_decomposition, legacy_decomposition):
@@ -63,5 +65,6 @@ def test_integrate_spin_decomposed_operator(spin_decomposition, legacy_decomposi
     )
 
     channels["matrix"] = matrix.flatten()
-    res = channels.set_index(CHANNEL_COLUMNS).sort_index()
+    index_cols = CHANNEL_COLUMNS + ["ms_ex_o", "ms_ex_i"]
+    res = channels.set_index(index_cols).sort_index()
     assert_frame_equal(res, legacy_decomposition)
