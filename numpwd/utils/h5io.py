@@ -76,8 +76,8 @@ class H5ValuePrep:
 
 def write_data(
     data: Dict[str, Any],
-    container: Union[File, Group],
-    parent_name: Optional[str] = None,
+    parent: Union[File, Group],
+    name: str,
     h5_value_prep: Optional[H5ValuePrep] = None,
     **kwargs,
 ) -> Dict[str, Union[Dataset, ndarray]]:
@@ -92,42 +92,41 @@ def write_data(
     """
 
     h5_value_prep = h5_value_prep if h5_value_prep is not None else H5ValuePrep()
-    address = parent_name or container.name
 
     dsets = []
     if isinstance(data, dict):
+        container = parent.create_group(name)
+        container.attrs["dtype"] = "dict"
         for key, val in data.items():
             if not isinstance(key, str):
                 raise TypeError(
-                    f"Key {parent_name}/{key} has illeagel format."
-                    " Can only write string keys."
+                    f"Key {key} has illeagel format. Can only write string keys."
                 )
             dsets += write_data(
-                val,
-                container,
-                parent_name=path.join(address, key),
-                h5_value_prep=h5_value_prep,
-                **kwargs,
+                val, container, key, h5_value_prep=h5_value_prep, **kwargs
             )
 
     elif isinstance(data, (tuple, list)):
-        dsets += write_data(
-            {str(n): data for n, data in enumerate(data)},
-            container,
-            parent_name=address,
-            h5_value_prep=h5_value_prep,
-            **kwargs,
-        )
+        container = parent.create_group(name)
+        container.attrs["dtype"] = str(type(data))
+        for n, el in enumerate(data):
+            dsets += write_data(
+                el, container, str(n), h5_value_prep=h5_value_prep, **kwargs
+            )
 
     elif data is None:
         pass
 
     else:
         options, attrs = h5_value_prep(data)
-        dset = container.create_dataset(address, **kwargs, **options)
+        dset = parent.create_dataset(name, **kwargs, **options)
         for key, val in attrs.items():
             dset.attrs[key] = val
 
         dsets += [dset]
 
     return dsets
+
+
+def read_data():
+    pass
