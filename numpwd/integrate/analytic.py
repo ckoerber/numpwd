@@ -4,7 +4,7 @@ from typing import Tuple, Optional, Dict
 
 from functools import lru_cache
 
-from sympy import Symbol
+from sympy import Symbol, separatevars
 from sympy import integrate as _integrate
 
 
@@ -70,7 +70,8 @@ def integrate(
             if var in ee.free_symbols:
                 kernel *= ee ** pp
 
-        integrated = cached_integrate(kernel, boundaries)
+        separated = separatevars(kernel, (var,), dict=True)
+        integrated = separated["coeff"] * cached_integrate(separated[var], boundaries)
 
         out += term / kernel * integrated
 
