@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 """Setup file for numpwd
 """
-__author__ = "None"
-__version__ = "0.1.0"
+from numpwd import __author__, __version__
 
 from os import path
 
