@@ -67,12 +67,11 @@ class H5ValuePrep:
             except Exception:
                 pass
 
-        obj_type = str(type(obj))
         for cls, prep_fcn in self.registry.items():
             if isinstance(obj, cls):
                 return prep_fcn(obj)
 
-        raise TypeError(f"Don't know how to prepare data of type {obj_type}")
+        raise TypeError(f"Don't know how to prepare data of type {type(obj)}")
 
 
 def write_data(
@@ -91,29 +90,44 @@ def write_data(
         parent_name: Optional[str] = None
             The name of the parent container.
     """
-    h5_value_prep = h5_value_prep or H5ValuePrep()
 
-    for key, val in data.items():
-        if not isinstance(key, str):
-            raise TypeError(
-                f"Key {parent_name}/{key} has illeagel format."
-                " Can only write string keys."
-            )
+    h5_value_prep = h5_value_prep if h5_value_prep is not None else H5ValuePrep()
+    address = parent_name or container.name
 
-        address = path.join(parent_name, key) if parent_name else key
-
-        if isinstance(val, dict):
-            write_data(val, container, parent_name=address)
-        elif isinstance(val, list):
-            write_data(
-                {str(n): val for n, val in enumerate(val)},
+    dsets = []
+    if isinstance(data, dict):
+        for key, val in data.items():
+            if not isinstance(key, str):
+                raise TypeError(
+                    f"Key {parent_name}/{key} has illeagel format."
+                    " Can only write string keys."
+                )
+            dsets += write_data(
+                val,
                 container,
-                parent_name=address,
+                parent_name=path.join(address, key),
+                h5_value_prep=h5_value_prep,
+                **kwargs,
             )
-        elif val is None:
-            continue
-        else:
-            options, attrs = h5_value_prep(val)
-            dset = container.create_dataset(address, **kwargs, **options)
-            for key, val in attrs.items():
-                dset.attrs[key] = val
+
+    elif isinstance(data, (tuple, list)):
+        dsets += write_data(
+            {str(n): data for n, data in enumerate(data)},
+            container,
+            parent_name=address,
+            h5_value_prep=h5_value_prep,
+            **kwargs,
+        )
+
+    elif data is None:
+        pass
+
+    else:
+        options, attrs = h5_value_prep(data)
+        dset = container.create_dataset(address, **kwargs, **options)
+        for key, val in attrs.items():
+            dset.attrs[key] = val
+
+        dsets += [dset]
+
+    return dsets
