@@ -1,4 +1,6 @@
 """Test runs the entire opertor integration pipeline for spin-dependent operator."""
+from logging import getLogger, DEBUG, basicConfig
+
 from numpy import array
 from pandas.testing import assert_frame_equal
 from sympy import S
@@ -8,6 +10,10 @@ from numpwd.operators.base import CHANNEL_COLUMNS
 from numpwd.operators.expression import decompose_operator
 
 from tests.integrate.op32_test import fixture_legacy_decomposition  # noqa
+
+
+basicConfig(level=DEBUG)
+LOGGER = getLogger("numpwd")
 
 
 def test_decompose_operator(legacy_decomposition):

@@ -2,12 +2,14 @@
 from typing import List, Dict, Union, Optional, Tuple
 from functools import lru_cache
 from itertools import product
+from logging import getLogger
 
 from numpy import ndarray, abs, array
 from pandas import DataFrame
 from sympy import S, Function
 
-from numpwd.integrate.analytic import integrate
+from numpwd.integrate.analytic import integrate, cached_integrate
+
 from numpwd.integrate.angular import ReducedAngularPolynomial, get_x_mesh, get_phi_mesh
 from numpwd.integrate.numeric import ExpressionMap
 from numpwd.qchannels.cg import get_cg, get_j_range
@@ -19,6 +21,8 @@ CG = Function("CG")
 FACT = CG("l_o", "ml_o", "s_o", "ms_o", "j_o", "mj_o")
 FACT *= CG("l_i", "ml_i", "s_i", "ms_i", "j_i", "mj_i")
 FACT *= CG("l_i", "ml_i", "la", "mla", "l_o", "ml_o")
+
+LOGGER = getLogger("numpwd")
 
 
 class Integrator:
@@ -52,11 +56,13 @@ class Integrator:
         self.real_only = real_only
 
     def _integrate(self, expr):
+        LOGGER.debug("Integrating: %s", expr)
         data = []
         for m_lambda in range(-self.m_lambda_max, self.m_lambda_max + 1):
             big_phi_integrated = integrate(
                 expr * self.pwd_fact_lambda.subs({"mla": m_lambda}), ("Phi", 0, "2*pi")
             )
+            LOGGER.debug("m_lambda=%d -> %s", m_lambda, big_phi_integrated)
             if big_phi_integrated:
                 fcn = ExpressionMap(big_phi_integrated, self._args)
                 tensor = fcn(*self._values)
@@ -258,6 +264,10 @@ def integrate_spin_decomposed_operator(
 
                 channel = tuple(pars.get(col) for col in channel_columns)
                 tmp[channel] = tmp.get(channel, 0) + fact * angular_channel["matrix"]
+
+    if cache_integrals:
+        LOGGER.debug("Integrator cache: %s", integrator._integrated_cached.cache_info())
+    LOGGER.debug("Analytic integrator cache: %s", cached_integrate.cache_info())
 
     # Sort and remove channels which cancel
     matrix = []

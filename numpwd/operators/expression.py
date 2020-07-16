@@ -89,7 +89,8 @@ def decompose_operator(
         pauli_symbol=operator.misc["pauli_symbol_spin"],
         ex_label=operator.misc["pauli_label_ex"],
     )
-    LOGGER.debug("Found %d non-zero channels", len(spins))
+    LOGGER.debug("Found %d non-zero channels (see below)", len(spins))
+    LOGGER.debug(DataFrame(spins))
 
     LOGGER.debug("Applying substitutions")
     for spin_mat in spins:
