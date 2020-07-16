@@ -7,13 +7,13 @@ from numpy import ndarray, abs, array
 from pandas import DataFrame
 from sympy import S, Function
 
-from numpwd.operators.base import CHANNEL_COLUMNS
 from numpwd.integrate.analytic import integrate
 from numpwd.integrate.angular import ReducedAngularPolynomial, get_x_mesh, get_phi_mesh
 from numpwd.integrate.numeric import ExpressionMap
 from numpwd.qchannels.cg import get_cg, get_j_range
 from numpwd.qchannels.lsj import get_m_range
 
+from numpwd.operators.base import CHANNEL_COLUMNS
 
 CG = Function("CG")
 FACT = CG("l_o", "ml_o", "s_o", "ms_o", "j_o", "mj_o")
@@ -65,10 +65,10 @@ class Integrator:
                 res = dict()
             for (l_o, l_i, la, mla), matrix in res.items():
 
-                if all(abs(matrix) < self.numeric_zero):
+                if (abs(matrix) < self.numeric_zero).all():
                     continue
                 if self.real_only:
-                    if any(abs(matrix.imag) > self.numeric_zero):
+                    if (abs(matrix.imag) > self.numeric_zero).any():
                         raise AssertionError(
                             "Specified to return real data but imag of components for"
                             f" l_o={l_o}, l_i={l_i}, lambda={la}, m_lambda={mla}"
@@ -194,15 +194,22 @@ def integrate_spin_decomposed_operator(
     # check arguments
     #   Check spin
     spe = spin_momentum_expressions.copy()
-    required_spin_keys = set(
-        ["s_o", "ms_o", "s_i", "ms_i", "ms_ex_o", "ms_ex_i", "expr"]
-    )
+    required_cols = set(["s_o", "ms_o", "s_i", "ms_i", "expr"])
+    cols = None
     for el in spe:
-        if required_spin_keys != set(el.keys()):
+        cols = list(el.keys()) if not cols else cols
+        missig_cols = required_cols - set(cols)
+        if missig_cols:
             raise KeyError(
-                f"Spin element {el} does not provide all required spin keys"
-                f" ({required_spin_keys})."
+                f"Spin element {el} does not match expected keys."
+                f" Required but not present: {missig_cols}."
             )
+        if set(cols) - set(el.keys()):
+            raise KeyError(f"Spin element {el} does not provide all columns.")
+
+    channel_columns = CHANNEL_COLUMNS + [
+        col for col in cols if col not in required_cols
+    ]
 
     # Allocate integration class
     angular_info = {}
@@ -249,7 +256,7 @@ def integrate_spin_decomposed_operator(
                 if abs(fact) < numeric_zero:
                     continue
 
-                channel = tuple(pars.get(key) for key in CHANNEL_COLUMNS)
+                channel = tuple(pars.get(col) for col in channel_columns)
                 tmp[channel] = tmp.get(channel, 0) + fact * angular_channel["matrix"]
 
     # Sort and remove channels which cancel
@@ -257,8 +264,11 @@ def integrate_spin_decomposed_operator(
     channels = []
     for channel in sorted(tmp):
         mat = tmp[channel]
-        if any(abs(mat) > numeric_zero):
+        if (abs(mat) > numeric_zero).any():
             channels.append(channel)
             matrix.append(mat)
 
-    return DataFrame(data=channels, columns=CHANNEL_COLUMNS), array(matrix)
+    return (
+        DataFrame(data=channels, columns=channel_columns),
+        array(matrix),
+    )
