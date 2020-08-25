@@ -19,24 +19,20 @@ def get_channel_overlap_indices(
     ],
 ) -> Tuple[ndarray, ndarray]:
     """Computes overlapping channel indicies."""
-    for df in [channels1, channels2]:
+    for key, df in {"First": channels1, "Second": channels2}.items():
         missing_columns = set(columns) - set(df.columns)
         if missing_columns:
             raise KeyError(
-                "Channels DataFrame does not contain all merge columns."
-                "\nMissing columns `%s`" % missing_columns
+                f"{key} channels DataFrame does not contain all merge columns."
+                f" Missing columns {missing_columns}"
             )
-    id1_name = channels1.index.name
-    id2_name = channels2.index.name
-    return (
-        merge(
-            channels1.reset_index().rename(columns={id1_name: "id"}),
-            channels2.reset_index().rename(columns={id2_name: "id"}),
-            how="inner",
-            left_on=columns,
-            right_on=columns,
-            suffixes=["1", "2"],
-        )
-        .rename(columns={"id": "id_dens", "index": "id_op"})[["id1", "id2"]]
-        .values.T
-    )
+    id1_name = channels1.index.name or "index"
+    id2_name = channels2.index.name or "index"
+    return merge(
+        channels1.reset_index().rename(columns={id1_name: "id1"}),
+        channels2.reset_index().rename(columns={id2_name: "id2"}),
+        how="inner",
+        left_on=columns,
+        right_on=columns,
+        suffixes=["1", "2"],
+    )[["id1", "id2"]].values.T
