@@ -1,22 +1,26 @@
 # pylint:disable=C0103
 """Module to compute spin operator Partial Wave Decompositions
 """
-
 from typing import Dict
 from typing import List
 from typing import Tuple
 from typing import Union
 
 from itertools import product
+from logging import getLogger
 
 from sympy import Symbol, S
 from sympy import Matrix
 
 from numpwd.qchannels.cg import get_cg, Number
 
+LOGGER = getLogger("numpwd")
+
 
 def op_pwd(
-    matrix: Dict[Tuple[Symbol, Symbol, Symbol, Symbol], Number], j_max_x2: int = 2
+    matrix: Dict[Tuple[Symbol, Symbol, Symbol, Symbol], Number],
+    j_max_x2: int = 2,
+    simplify: bool = True,
 ) -> Dict:
     """Computes the operator Partial Wave Decomposition of the operator.
 
@@ -59,7 +63,7 @@ def op_pwd(
                             "j_in": j_in,
                             "xi": xi,
                             "mxi": mxi,
-                            "val": val.simplify(),
+                            "val": val.simplify() if simplify else val,
                         }
                     )
 
@@ -67,7 +71,7 @@ def op_pwd(
 
 
 def pauli_contract_subsystem(
-    matrix: Dict[Tuple[int, int, int, int], Number]
+    matrix: Dict[Tuple[int, int, int, int], Number], simplify: bool = True
 ) -> Dict[Tuple[int, int, int, int], Number]:
     """Computes spin contraction of two nucleon pauli spin half operators:
 
@@ -105,7 +109,7 @@ def pauli_contract_subsystem(
 
                 res += tres
 
-            res = res.expand().simplify()
+            res = res.expand().simplify() if simplify else res
             if res != 0:
                 op_dict[(j_out, mj_out, j_in, mj_in)] = res
 
@@ -137,7 +141,9 @@ def pauli_substitution(
 
 
 def expression_to_matrix(
-    op_expression: Union[str, Symbol], pauli_symbol: str = "sigma"
+    op_expression: Union[str, Symbol],
+    pauli_symbol: str = "sigma",
+    simplify: bool = True,
 ) -> Dict[Tuple[Symbol, Symbol, Symbol, Symbol], Number]:
     """Converts pauli matrix expression to matrix element in spin subsystem.
 
@@ -154,6 +160,9 @@ def expression_to_matrix(
         Dictionary with keys (ms2_out, ms1_out, ms1_in, ms2_in) and values corresponding
         to the matrix element.
     """
+    LOGGER.debug(
+        "Converting `%s` to matrix (pauli symbol = `%s`)", op_expression, pauli_symbol
+    )
     if isinstance(op_expression, str):
         op_expression = S(op_expression)
 
@@ -170,10 +179,13 @@ def expression_to_matrix(
             pauli_substitution(2, ms2_out, ms2_in, pauli_symbol=pauli_symbol)
         )
 
-        val = op_expression.subs(substitutions).simplify()
+        val = op_expression.subs(substitutions)
+        val = val.simplify() if simplify else val
 
         if val != 0:
             matrix[(ms2_out, ms1_out, ms1_in, ms2_in)] = val
+
+    LOGGER.debug("Matrix entries:\n%s", matrix)
 
     return matrix
 
@@ -182,6 +194,7 @@ def expression_to_matrix_spin_half(
     op_expression: Union[str, Symbol],
     pauli_symbol: str = "sigma",
     pauli_label: str = "_ex",
+    simplify: bool = True,
 ) -> Dict[Tuple[Symbol, Symbol], Number]:
     """Converts pauli matrix expression to matrix element in spin subsystem.
 
@@ -213,7 +226,8 @@ def expression_to_matrix_spin_half(
             pauli_label, ms_out, ms_in, pauli_symbol=pauli_symbol
         )
 
-        val = op_expression.subs(substitutions).simplify()
+        val = op_expression.subs(substitutions)
+        val = val.simplify() if simplify else val
 
         if val != 0:
             matrix[(ms_out, ms_in)] = val
@@ -225,6 +239,7 @@ def expression_to_matrix_ex(
     op_expression: Union[str, Symbol],
     pauli_symbol: str = "sigma",
     ex_label: str = "_ex",
+    simplify: bool = True,
 ) -> Dict[Tuple[Symbol, Symbol], Dict[Tuple[Symbol, Symbol, Symbol, Symbol], Number]]:
     """Converts pauli matrix expression to matrix element in spin subsystem.
 
@@ -269,10 +284,15 @@ def expression_to_matrix_ex(
 
     matrix = {}
     for ex_key, expr in expression_to_matrix_spin_half(
-        op_expression, pauli_symbol=pauli_symbol, pauli_label=ex_label
+        op_expression,
+        pauli_symbol=pauli_symbol,
+        pauli_label=ex_label,
+        simplify=simplify,
     ).items():
         if expr:
-            matrix[ex_key] = expression_to_matrix(expr, pauli_symbol=pauli_symbol)
+            matrix[ex_key] = expression_to_matrix(
+                expr, pauli_symbol=pauli_symbol, simplify=simplify
+            )
 
     return matrix
 
@@ -295,7 +315,7 @@ def dict_to_data(
 
 
 def get_spin_matrix_element(
-    expr: Symbol, pauli_symbol: str = "sigma"
+    expr: Symbol, pauli_symbol: str = "sigma", simplify: bool = True
 ) -> List[Dict[str, Number]]:
     r"""Converts sympy expression containing pauli matrices to a spin decomposed matrix element.
 
@@ -316,13 +336,16 @@ def get_spin_matrix_element(
         -> expr = sigma11 * sigma21 + sigma12 * sigma22 + sigma13 * sigma23
         -> < 0 0 | M | 0 0 > = -3 and < 1 ms_o | M | 1 ms_i > = 1 if ms_o == ms_i
     """
-    mat = expression_to_matrix(expr, pauli_symbol=pauli_symbol)
-    mat12 = pauli_contract_subsystem(mat)
+    mat = expression_to_matrix(expr, pauli_symbol=pauli_symbol, simplify=simplify)
+    mat12 = pauli_contract_subsystem(mat, simplify=simplify)
     return dict_to_data(mat12, columns=["s_o", "ms_o", "s_i", "ms_i"], value_key="expr")
 
 
 def get_spin_matrix_element_ex(
-    expr: Symbol, pauli_symbol: str = "sigma", ex_label: str = "_ex"
+    expr: Symbol,
+    pauli_symbol: str = "sigma",
+    ex_label: str = "_ex",
+    simplify: bool = True,
 ) -> List[Dict[str, Number]]:
     r"""Converts sympy expression containing pauli matrices to a spin decomposed matrix element.
 
@@ -347,9 +370,9 @@ def get_spin_matrix_element_ex(
     """
     tmp = {}
     for key_ex, mat in expression_to_matrix_ex(
-        expr, pauli_symbol=pauli_symbol, ex_label=ex_label
+        expr, pauli_symbol=pauli_symbol, ex_label=ex_label, simplify=simplify
     ).items():
-        for key_nuc, expr in pauli_contract_subsystem(mat).items():
+        for key_nuc, expr in pauli_contract_subsystem(mat, simplify=simplify).items():
             tmp[key_ex + key_nuc] = expr
     return dict_to_data(
         tmp,
