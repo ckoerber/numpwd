@@ -58,6 +58,9 @@ class Density:
     #: Additional information
     misc: Dict[str, float] = field(default_factory=dict)
 
+    #: Type of density (2-body or 1-body)
+    dtype: str = "2b"
+
     def check(self):
         """Runs checks if density was properly initialized."""
         if self.jx2 is None:
