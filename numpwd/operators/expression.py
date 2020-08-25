@@ -6,7 +6,7 @@ from logging import getLogger
 
 from numpy import ndarray
 from pandas import DataFrame
-from sympy import S
+from sympy import S, sympify
 
 from numpwd import __version__
 from numpwd.qchannels.spin import get_spin_matrix_element_ex, get_spin_matrix_element
@@ -43,6 +43,7 @@ def decompose_operator(
 
     operator = Operator()
 
+    spin_momentum_expression = sympify(spin_momentum_expression)
     operator.misc["spin_momentum_expression"] = spin_momentum_expression
     operator.misc["isospin_expression"] = isospin_expression
     operator.misc["subsititutions"] = substitutions
@@ -84,11 +85,22 @@ def decompose_operator(
     LOGGER.info(
         "Running angular decomposition of operator %s", spin_momentum_expression
     )
-    spins = get_spin_matrix_element_ex(
-        spin_momentum_expression,
-        pauli_symbol=operator.misc["pauli_symbol_spin"],
-        ex_label=operator.misc["pauli_label_ex"],
+    ext_spin_matrix = str(operator.misc["pauli_symbol_spin"]) + str(
+        operator.misc["pauli_label_ex"]
     )
+    if ext_spin_matrix in str(spin_momentum_expression):
+        LOGGER.debug("Using decomposition with external pauli matrix")
+        spins = get_spin_matrix_element_ex(
+            spin_momentum_expression,
+            pauli_symbol=operator.misc["pauli_symbol_spin"],
+            ex_label=operator.misc["pauli_label_ex"],
+        )
+    else:
+        LOGGER.debug("No external pauli matrix detected. Using regular decomposition.")
+        spins = get_spin_matrix_element(
+            spin_momentum_expression, pauli_symbol=operator.misc["pauli_symbol_spin"]
+        )
+
     LOGGER.debug("Found %d non-zero channels (see below)", len(spins))
     LOGGER.debug(DataFrame(spins))
 
