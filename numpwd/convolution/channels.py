@@ -18,7 +18,11 @@ def get_channel_overlap_indices(
         "mj_i",
     ],
 ) -> Tuple[ndarray, ndarray]:
-    """Computes overlapping channel indicies."""
+    """Computes overlapping channel indicies.
+
+    Runs inner merge (join) on specfied columns and returns indices of
+    overlapping channels.
+    """
     for key, df in {"First": channels1, "Second": channels2}.items():
         missing_columns = set(columns) - set(df.columns)
         if missing_columns:
@@ -28,11 +32,13 @@ def get_channel_overlap_indices(
             )
     id1_name = channels1.index.name or "index"
     id2_name = channels2.index.name or "index"
-    return merge(
-        channels1.reset_index().rename(columns={id1_name: "id1"}),
-        channels2.reset_index().rename(columns={id2_name: "id2"}),
-        how="inner",
-        left_on=columns,
-        right_on=columns,
-        suffixes=["1", "2"],
-    )[["id1", "id2"]].values.T
+    return tuple(
+        merge(
+            channels1.reset_index().rename(columns={id1_name: "id1"}),
+            channels2.reset_index().rename(columns={id2_name: "id2"}),
+            how="inner",
+            left_on=columns,
+            right_on=columns,
+            suffixes=["1", "2"],
+        )[["id1", "id2"]].values.T
+    )
