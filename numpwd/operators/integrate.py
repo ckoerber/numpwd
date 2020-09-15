@@ -49,7 +49,9 @@ class Integrator:
         )
         angular_keys = ("x_o", "x_i", "phi")
         self._args = tuple([key for key, _ in args if key not in angular_keys])
-        self._values = tuple([val for key, val in args if key not in angular_keys])
+        self._values = tuple(
+            [array(val) for key, val in args if key not in angular_keys]
+        )
         self._args += angular_keys
         self._values += (self.poly.x, self.poly.x, self.poly.phi)
         self.numeric_zero = numeric_zero
