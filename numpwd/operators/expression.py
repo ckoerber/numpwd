@@ -1,6 +1,6 @@
 """
 """
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Optional
 from datetime import datetime
 from logging import getLogger
 
@@ -30,6 +30,7 @@ def decompose_operator(
     substitutions: List[Dict[str, str]] = None,
     spin_decomposition_kwargs: Dict[str, Any] = None,
     integration_kwargs: Dict[str, Any] = None,
+    misc: Optional[Dict[str, Any]] = None,
 ):
     """
 
@@ -42,6 +43,7 @@ def decompose_operator(
     integration_kwargs = integration_kwargs or {}
 
     operator = Operator()
+    operator.misc = dict(misc)
 
     spin_momentum_expression = sympify(spin_momentum_expression)
     operator.misc["spin_momentum_expression"] = spin_momentum_expression
