@@ -4,3 +4,5 @@ sympy
 pandas
 h5py
 pyyaml
+psutil
+tqdm

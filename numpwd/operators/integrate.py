@@ -37,6 +37,7 @@ class Integrator:
         use_cache: bool = True,
         numeric_zero: float = 1.0e-14,
         real_only: bool = True,
+        adaptive_chunks: bool = True,
     ):
         """Initialize angular ingrator with given mesh."""
         self.poly = red_ang_poly
@@ -56,6 +57,7 @@ class Integrator:
         self._values += (self.poly.x, self.poly.x, self.poly.phi)
         self.numeric_zero = numeric_zero
         self.real_only = real_only
+        self.adaptive_chunks = adaptive_chunks
 
     def _integrate(self, expr):
         LOGGER.debug("Integrating: %s", expr)
@@ -68,7 +70,9 @@ class Integrator:
             if big_phi_integrated:
                 fcn = ExpressionMap(big_phi_integrated, self._args)
                 tensor = fcn(*self._values)
-                res = self.poly.integrate(tensor, m_lambda)
+                res = self.poly.integrate(
+                    tensor, m_lambda, adaptive_chunks=self.adaptive_chunks
+                )
             else:
                 res = dict()
             for (l_o, l_i, la, mla), matrix in res.items():
@@ -114,6 +118,7 @@ def integrate_spin_decomposed_operator(
     cache_integrals: bool = True,
     numeric_zero: float = 1.0e-14,
     real_only: bool = True,
+    adaptive_chunks: bool = True,
 ) -> Tuple[DataFrame, ndarray]:
     r"""Runs angular integrals and contracts ls to j for spin decomposed two-nucleon operator.
 
@@ -232,6 +237,7 @@ def integrate_spin_decomposed_operator(
         use_cache=cache_integrals,
         real_only=real_only,
         numeric_zero=numeric_zero,
+        adaptive_chunks=adaptive_chunks,
     )
 
     tmp = dict()

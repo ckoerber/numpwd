@@ -3,6 +3,11 @@ from typing import Dict, Tuple, Optional
 
 from itertools import product
 from warnings import warn
+from logging import getLogger
+
+from psutil import virtual_memory
+
+from tqdm import tqdm
 
 import numpy as np
 from numpy.polynomial.legendre import leggauss
@@ -12,6 +17,8 @@ from scipy.special import sph_harm
 from pandas import DataFrame
 
 from numpwd.qchannels.cg import get_cg as cg
+
+LOGGER = getLogger("numpwd")
 
 
 def get_x_mesh(nx: int) -> Tuple[np.ndarray, np.ndarray]:
@@ -175,7 +182,7 @@ class ReducedAngularPolynomial:
         return self.channel_df.loc[ii].to_dict(), self.matrix[ii]
 
     def integrate(
-        self, matrix: np.ndarray, mla: int, max_chunk_size: Optional[int] = None,
+        self, matrix: np.ndarray, mla: int, adaptive_chunks: bool = True,
     ):
         r"""Runs angular integrations against provided matrix.
 
@@ -228,12 +235,27 @@ class ReducedAngularPolynomial:
             len(self.wphi),
         )
 
-        max_chunk_size = max_chunk_size or len(mask)
-        chunks = len(mask) // max_chunk_size
+        chunks = 1
+        if adaptive_chunks:
+            LOGGER.debug("Adaptively setting size of array.")
+            matrix_size = np.product(mat_shape) * len(mask)
+            total_bytes = matrix_size * 2 * 16  # two matrices of this size, complex
+
+            mem = virtual_memory().available
+
+            LOGGER.debug("Available memory: %1.2f GB.", mem / 1024 ** 3)
+            LOGGER.debug("Expected array sizes: %1.2f GB.", total_bytes / 1024 ** 3)
+
+            if total_bytes > 0.9 * mem:
+                chunks = int(total_bytes / (0.9 * mem))
+                LOGGER.debug("Dividing up integration into %d chunks.", chunks)
 
         out = {}
-        for channels_chunk, kernel_chunk in zip(
-            np.array_split(self.channels[mask], chunks), np.array_split(kernel, chunks),
+        for channels_chunk, kernel_chunk in tqdm(
+            zip(
+                np.array_split(self.channels[mask], chunks),
+                np.array_split(kernel, chunks),
+            )
         ):
             res_chunk = np.sum(
                 kernel_chunk * matrix.reshape(1, *mat_shape), axis=(-3, -2, -1),
