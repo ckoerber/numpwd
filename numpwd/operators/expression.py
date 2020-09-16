@@ -5,6 +5,7 @@ from datetime import datetime
 from logging import getLogger
 
 from numpy import ndarray
+from numpy import array as np_array
 from pandas import DataFrame
 from sympy import S, sympify
 
@@ -15,6 +16,13 @@ from numpwd.operators.integrate import integrate_spin_decomposed_operator
 
 
 LOGGER = getLogger("numpwd")
+
+
+try:
+    import cupy as cp
+except ImportError:
+    LOGGER.debug("Cupy not available")
+    cp = None
 
 
 def subs_all(expr, substitutions):
@@ -71,6 +79,10 @@ def decompose_operator(
     operator.mesh_info["polar_type"] = "leggaus"
     operator.mesh_info["nx"] = integration_kwargs.get("nx", operator.misc["lmax"] + 1)
 
+    gpu = integration_kwargs.get("gpu", False)
+    array = cp.array if gpu and cp is not None else np_array
+    args = [(key, array(val)) for key, val in args]
+
     operator.args = args
 
     operator.misc["numpwd_version"] = __version__
@@ -119,6 +131,7 @@ def decompose_operator(
         lmax=operator.misc["lmax"],
         numeric_zero=operator.misc["numeric_zero"],
         m_lambda_max=operator.misc["m_lambda_max"],
+        gpu=gpu,
     )
 
     operator.misc["computation_end"] = datetime.now()

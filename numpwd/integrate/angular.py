@@ -5,7 +5,7 @@ from itertools import product
 from warnings import warn
 from logging import getLogger
 
-from psutil import virtual_memory
+from numpwd.utils.backend import get_available_memory
 
 from tqdm import tqdm
 
@@ -19,6 +19,12 @@ from pandas import DataFrame
 from numpwd.qchannels.cg import get_cg as cg
 
 LOGGER = getLogger("numpwd")
+
+try:
+    import cupy as cp
+except ImportError:
+    LOGGER.debug("Cupy not available")
+    cp = None
 
 
 def get_x_mesh(nx: int) -> Tuple[np.ndarray, np.ndarray]:
@@ -84,9 +90,13 @@ class ReducedAngularPolynomial:
         lmax: int = 4,
         wx: Optional[np.ndarray] = None,
         wphi: Optional[np.ndarray] = None,
+        gpu: bool = False,
     ):
         """Allocates the angular matrix element."""
         self._iter = 0
+
+        if gpu and cp is None:
+            raise ValueError("Could not load cupy but specified gpu backend.")
 
         self.x = x
         self.phi = phi
@@ -101,6 +111,13 @@ class ReducedAngularPolynomial:
 
         self.matrix = None
         self._allocate_matrix()
+
+        if gpu:
+            self.matrix = cp.array(self.matrix)
+            self.x = cp.array(self.x)
+            self.phi = cp.array(self.phi)
+            self.wx = cp.array(self.wx)
+            self.wphi = cp.array(self.wphi)
 
     def _allocate_channels(self):
         """Allocates the quantum channels."""
@@ -235,13 +252,23 @@ class ReducedAngularPolynomial:
             len(self.wphi),
         )
 
+        if (
+            cp is not None
+            and isinstance(matrix, cp.ndarray)
+            and not isinstance(kernel, cp.ndarray)
+        ):
+            LOGGER.debug("Porting angular poly kernel to GPU")
+            kernel = cp.array(kernel)
+
         chunks = 1
         if adaptive_chunks:
             LOGGER.debug("Adaptively setting size of array.")
             matrix_size = np.product(mat_shape) * len(mask)
             total_bytes = matrix_size * 2 * 16  # two matrices of this size, complex
 
-            mem = virtual_memory().available
+            mem = get_available_memory(
+                gpu=cp is not None and isinstance(matrix, cp.ndarray)
+            )
 
             LOGGER.debug("Available memory: %1.2f GB.", mem / 1024 ** 3)
             LOGGER.debug("Expected array sizes: %1.2f GB.", total_bytes / 1024 ** 3)
@@ -257,8 +284,8 @@ class ReducedAngularPolynomial:
                 np.array_split(kernel, chunks),
             )
         ):
-            res_chunk = np.sum(
-                kernel_chunk * matrix.reshape(1, *mat_shape), axis=(-3, -2, -1),
+            res_chunk = (kernel_chunk * matrix.reshape(1, *mat_shape)).sum(
+                axis=(-3, -2, -1)
             )
             for channel, res in zip(channels_chunk, res_chunk):
                 out[tuple(channel)] = res

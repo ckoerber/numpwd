@@ -23,6 +23,11 @@ FACT *= CG("l_i", "ml_i", "s_i", "ms_i", "j_i", "mj_i")
 FACT *= CG("l_i", "ml_i", "la", "mla", "l_o", "ml_o")
 
 LOGGER = getLogger("numpwd")
+try:
+    import cupy as cp
+except ImportError:
+    LOGGER.debug("Cupy not available")
+    cp = None
 
 
 class Integrator:
@@ -50,9 +55,7 @@ class Integrator:
         )
         angular_keys = ("x_o", "x_i", "phi")
         self._args = tuple([key for key, _ in args if key not in angular_keys])
-        self._values = tuple(
-            [array(val) for key, val in args if key not in angular_keys]
-        )
+        self._values = tuple([val for key, val in args if key not in angular_keys])
         self._args += angular_keys
         self._values += (self.poly.x, self.poly.x, self.poly.phi)
         self.numeric_zero = numeric_zero
@@ -119,6 +122,7 @@ def integrate_spin_decomposed_operator(
     numeric_zero: float = 1.0e-14,
     real_only: bool = True,
     adaptive_chunks: bool = True,
+    gpu: bool = False,
 ) -> Tuple[DataFrame, ndarray]:
     r"""Runs angular integrals and contracts ls to j for spin decomposed two-nucleon operator.
 
@@ -204,6 +208,9 @@ def integrate_spin_decomposed_operator(
             specifying which (ls)j quantum numbers correspond to which matrix entry
             (index of df == first index of matrix).
     """
+    if gpu and cp is None:
+        raise ValueError("Specified gpu backend but cupy not found.")
+
     # check arguments
     #   Check spin
     spe = spin_momentum_expressions.copy()
@@ -228,7 +235,7 @@ def integrate_spin_decomposed_operator(
     angular_info = {}
     angular_info["x"], angular_info["wx"] = get_x_mesh(nx)
     angular_info["phi"], angular_info["wphi"] = get_phi_mesh(nphi)
-    red_ang_poly = ReducedAngularPolynomial(**angular_info, lmax=lmax)
+    red_ang_poly = ReducedAngularPolynomial(**angular_info, lmax=lmax, gpu=gpu)
     m_lambda_max = m_lambda_max if m_lambda_max is not None else 2 * lmax
     integrator = Integrator(
         red_ang_poly=red_ang_poly,
@@ -288,5 +295,5 @@ def integrate_spin_decomposed_operator(
 
     return (
         DataFrame(data=channels, columns=channel_columns),
-        array(matrix),
+        array(matrix) if not gpu else cp.array(matrix),
     )
