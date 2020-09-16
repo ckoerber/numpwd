@@ -108,6 +108,7 @@ integration_kwargs:
   nphi: 16
   numeric_zero: 1.0e-08
   nx: 10
+  gpu: True
 isospin_expression: tau10*tau20
 misc:
   momentum-mesh:
@@ -116,8 +117,8 @@ misc:
     n2: 8
     ntot: 36
     p1: 1.0
-    p2: 7.0
-    p3: 20.0
+    p2: 5.0
+    p3: 15.0
   op-name: one-pion exchange 1
 spin_decomposition_kwargs: {}
 spin_momentum_expression: 3*g_A**2*q*sigma13*(sigma21*(p_i1/2 - p_o1/2) + sigma22*(p_i2/2
