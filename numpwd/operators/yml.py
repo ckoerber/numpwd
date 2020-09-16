@@ -5,6 +5,7 @@ from yaml import safe_load
 from json import dumps
 
 from numpwd.operators.expression import decompose_operator
+from numpwd.operators.h5 import write
 
 LOGGER = getLogger("numpwd")
 
@@ -28,6 +29,8 @@ def main():
 
     parser = ArgumentParser(description="Run numpwd for operator over yml file.")
     parser.add_argument("input", help="Name of the yml input file", type=str)
+    parser.add_argument("-o", "--output", help="Name of the yml input file", type=str)
+
     parser.add_argument(
         "-l",
         "--log",
@@ -39,7 +42,10 @@ def main():
     level = level_config.get(args.log)
     basicConfig(level=level)
 
-    read_yml(args.input)
+    op = read_yml(args.input)
+
+    if args.output:
+        write(op, args.output)
 
 
 if __name__ == "__main__":

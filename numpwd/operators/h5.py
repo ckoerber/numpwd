@@ -8,6 +8,11 @@ from datetime import datetime
 from numpwd.utils.h5io import get_dsets, write_data, H5ValuePrep, read_data
 from numpwd.operators.base import Operator
 
+try:
+    import cupy as cp
+except ImportError:
+    cp = None
+
 
 def prep_sympy(expr):
     return {"data": str(expr)}, {"dtype": "sympy"}
@@ -29,13 +34,19 @@ def prep_dataframe(df):
     return {"data": values}, {"dtype": "dataframe", "columns": tmp.columns.to_list()}
 
 
-H5_VALUE_PREP = H5ValuePrep(
-    {
-        (AtomicExpr, Expr): prep_sympy,
-        datetime: prep_datetime,
-        (DataFrame, Series): prep_dataframe,
-    }
-)
+def prep_cupy(array):
+    return {"data": cp.asnumpy(array)}, {"dtype": "cupy"}
+
+
+PREP_MAP = {
+    (AtomicExpr, Expr): prep_sympy,
+    datetime: prep_datetime,
+    (DataFrame, Series): prep_dataframe,
+}
+if cp is not None:
+    PREP_MAP[cp.ndarray] = prep_cupy
+
+H5_VALUE_PREP = H5ValuePrep(PREP_MAP)
 
 
 def write(operator: Operator, filename: str):
@@ -45,7 +56,7 @@ def write(operator: Operator, filename: str):
         operator: operator to export.
         filename: Path and file name to file.
     """
-    with H5File("test.h5", "w") as h5f:
+    with H5File(filename, "w") as h5f:
         for key in ["matrix", "channels", "args", "isospin", "mesh_info", "misc"]:
             write_data(getattr(operator, key), h5f, key, h5_value_prep=H5_VALUE_PREP)
 
