@@ -61,17 +61,16 @@ class H5ValuePrep:
         if isinstance(obj, ndarray) or isinstance(obj, str):
             return {"data": obj}, {}
         else:
+            for cls, prep_fcn in self.registry.items():
+                if isinstance(obj, cls):
+                    return prep_fcn(obj)
             try:
                 if array(obj).dtype != object:
                     return {"data": obj}, {}
             except Exception:
                 pass
 
-        for cls, prep_fcn in self.registry.items():
-            if isinstance(obj, cls):
-                return prep_fcn(obj)
-
-        raise TypeError(f"Don't know how to prepare data of type {type(obj)}")
+            raise TypeError(f"Don't know how to prepare data of type {type(obj)}")
 
 
 def write_data(
@@ -90,6 +89,8 @@ def write_data(
         parent_name: Optional[str] = None
             The name of the parent container.
     """
+
+    breakpoint()
 
     h5_value_prep = h5_value_prep if h5_value_prep is not None else H5ValuePrep()
 
@@ -128,5 +129,7 @@ def write_data(
     return dsets
 
 
-def read_data():
-    pass
+def read_data(
+    container: Union[File, Group], h5_value_prep: Optional[H5ValuePrep] = None,
+):
+    data = get_dsets(container, load_dsets=False)
