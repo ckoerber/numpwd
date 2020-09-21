@@ -39,8 +39,8 @@ def decompose_operator(
     spin_decomposition_kwargs: Dict[str, Any] = None,
     integration_kwargs: Dict[str, Any] = None,
     misc: Optional[Dict[str, Any]] = None,
-):
-    """
+) -> Operator:
+    """Runs entire spin partial wave decomposition for operator.
 
     Arguments:
         isospin_expression: List of isospin matrix elements (dicts) which must have
@@ -51,7 +51,7 @@ def decompose_operator(
     integration_kwargs = integration_kwargs or {}
 
     operator = Operator()
-    operator.misc = dict(misc)
+    operator.misc = dict(misc) if misc else {}
 
     spin_momentum_expression = sympify(spin_momentum_expression)
     operator.misc["spin_momentum_expression"] = spin_momentum_expression
