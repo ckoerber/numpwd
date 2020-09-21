@@ -38,17 +38,23 @@ def read_datetime(arg, **kwargs):
 
 def prep_dataframe(df):
     """Converts data frame to array and stores columns if possible, else to csv."""
-    index_col = df.index.name or "index"
+    meta = {"dtype": "dataframe"}
+    if df.index.nlevels == 1:
+        meta["index_col"] = df.index.name or "index"
+    else:
+        meta["index_cols"] = [
+            key or f"level_{n}" for n, key in enumerate(df.index.names)
+        ]
+
     tmp = df.reset_index()
+    meta["columns"] = tmp.columns.to_list()
+
     values = tmp.values
     values = values if values.dtype != object else tmp.to_csv(index=False)
-    column_dtypes = {f"{key}_dt": str(val) for key, val in df.dtypes.items()}
-    meta = {
-        "dtype": "dataframe",
-        "columns": tmp.columns.to_list(),
-        "index_col": index_col,
-        **column_dtypes,
-    }
+
+    column_dtypes = {f"{key}_dt": str(val) for key, val in tmp.dtypes.items()}
+    meta.update(column_dtypes)
+
     return {"data": values}, meta
 
 
@@ -60,11 +66,20 @@ def read_dataframe(arg, **kwargs):
         else DataFrame(data=arg, columns=kwargs["columns"])
     )
 
-    if "column_dtypes" in kwargs:
-        df = df.astype(kwargs.get("column_dtypes", None))
+    dtypes = {
+        key.replace("_dt", ""): val
+        for key, val in kwargs.items()
+        if key.endswith("_dt")
+    }
+    if dtypes:
+        df = df.astype(dtypes)
 
     if "index_col" in kwargs and kwargs["index_col"] in df.columns:
         df = df.set_index(kwargs["index_col"])
+
+    if "index_cols" in kwargs and set(kwargs["index_cols"]).issubset(df.columns):
+        df = df.set_index(list(kwargs["index_cols"]))
+
     return df
 
 
