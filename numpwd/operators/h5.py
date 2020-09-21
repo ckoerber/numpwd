@@ -91,7 +91,7 @@ READ_MAP = {
 }
 
 
-H5_VALUE_PREP = H5ValuePrep(prep_map=PREP_MAP, read_map=READ_MAP)
+H5_VALUE_PREP = H5ValuePrep(write_registry=PREP_MAP, read_registry=READ_MAP)
 
 
 def write(operator: Operator, filename: str):

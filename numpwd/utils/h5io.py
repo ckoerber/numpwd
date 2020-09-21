@@ -50,18 +50,22 @@ class H5ValuePrep:
 
     def __init__(
         self,
-        registry: Dict[
+        write_registry: Dict[
+            object, Callable[[object], Tuple[Dict[str, Any], Dict[str, Any]]]
+        ] = None,
+        read_registry: Dict[
             object, Callable[[object], Tuple[Dict[str, Any], Dict[str, Any]]]
         ] = None,
     ):
-        self.registry = registry or {}
+        self.write_registry = write_registry or {}
+        self.read_registry = read_registry or {}
 
-    def __call__(self, obj) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    def prepare(self, obj) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """Try parsing data to expected shape."""
         if isinstance(obj, ndarray) or isinstance(obj, str):
             return {"data": obj}, {}
         else:
-            for cls, prep_fcn in self.registry.items():
+            for cls, prep_fcn in self.write_registry.items():
                 if isinstance(obj, cls):
                     return prep_fcn(obj)
             try:
@@ -71,6 +75,15 @@ class H5ValuePrep:
                 pass
 
             raise TypeError(f"Don't know how to prepare data of type {type(obj)}")
+
+    def read(self, obj, **kwargs) -> Any:
+        """Try parsing data to expected shape."""
+        dtype = kwargs.pop("dtype", None)
+        if dtype is not None:
+            if dtype not in self.read_registry:
+                raise TypeError(f"Don't know how to read data of type {dtype}")
+            obj = self.read_registry[dtype](obj, **kwargs)
+        return obj
 
 
 def write_data(
@@ -89,9 +102,6 @@ def write_data(
         parent_name: Optional[str] = None
             The name of the parent container.
     """
-
-    breakpoint()
-
     h5_value_prep = h5_value_prep if h5_value_prep is not None else H5ValuePrep()
 
     dsets = []
@@ -119,7 +129,7 @@ def write_data(
         pass
 
     else:
-        options, attrs = h5_value_prep(data)
+        options, attrs = h5_value_prep.prepare(data)
         dset = parent.create_dataset(name, **kwargs, **options)
         for key, val in attrs.items():
             dset.attrs[key] = val
@@ -132,4 +142,7 @@ def write_data(
 def read_data(
     container: Union[File, Group], h5_value_prep: Optional[H5ValuePrep] = None,
 ):
-    data = get_dsets(container, load_dsets=False)
+
+    h5_value_prep = h5_value_prep if h5_value_prep is not None else H5ValuePrep()
+
+    dsets = get_dsets(container, load_dsets=True)
