@@ -159,7 +159,7 @@ def parse_groups(container: Union[File, Group, Dataset], data: Dict[str, Any]) -
         ddata = [
             parse_groups(container[key], data[key]) for key in sorted(container.keys())
         ]
-        return ddata if dtype == "list" else tuple(ddata)
+        return ddata if dtype == "<class 'list'>" else tuple(ddata)
     else:
         return {key: parse_groups(val, data[key]) for key, val in container.items()}
 
