@@ -2,8 +2,8 @@
 from typing import Dict, Tuple, List
 from dataclasses import dataclass, field
 
-from numpy import array, ndarray
-from pandas import DataFrame
+from numpy import array, ndarray, allclose
+from pandas import DataFrame, Series
 
 CHANNEL_COLUMNS = [
     "l_o",
@@ -70,5 +70,32 @@ class Operator:
                     f"Operator argument {key} shape does not match matrix shape."
                 )
 
-        if not self.isospin:
+        if self.isospin is None or len(self.isospin) == 0:
             raise KeyError("Isospin matrix is empty")
+
+    def __eq__(self, other):
+        """Checks if all attributes are equal within numeric precision."""
+        if not isinstance(other, Operator):
+            return NotImplemented
+
+        if self.mesh_info != other.mesh_info:
+            return False
+
+        if self.misc != other.misc:
+            return False
+
+        if len(self.args) == len(other.args):
+            for (k1, v1), (k2, v2) in zip(self.args, other.args):
+                if k1 != k2 or not allclose(v1, v2, rtol=1.0e-12, atol=0.0):
+                    return False
+
+        if not self.channels.equals(other.channels):
+            return False
+
+        if not self.isospin.equals(other.isospin):
+            return False
+
+        if not allclose(self.matrix, other.matrix, rtol=1.0e-12, atol=0.0):
+            return False
+
+        return True
