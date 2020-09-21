@@ -68,7 +68,7 @@ def read(filename: str) -> Operator:
         filename: Path and file name to file.
     """
     operator = Operator()
-    with H5File("test.h5", "w") as h5f:
+    with H5File("test.h5", "r") as h5f:
         for key in ["matrix", "channels", "args", "isospin", "mesh_info", "misc"]:
             setattr(operator, key, read_data(h5f[key], h5_value_prep=H5_VALUE_PREP))
 
