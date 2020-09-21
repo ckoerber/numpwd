@@ -1,8 +1,10 @@
 """Tests for exporting and importing opertor to and from h5."""
 from logging import getLogger, DEBUG, basicConfig
+from tempfile import TemporaryDirectory
+from os import path
 
 from numpy import arange, random
-from pandas import DataFrame
+from pandas import DataFrame, Series
 from pandas.testing import assert_frame_equal
 from sympy import sympify
 
@@ -22,13 +24,13 @@ def fixture_random_op() -> Operator:
     random.seed(42)
 
     spin_expression = sympify("(sigma_ex1 * k1 + sigma_ex2 * k2 + sigma_ex3 * k3)")
-    substitutions = [SPHERICAL_BASE_SUBS, ANGLE_BASE_SUBS]
+    substitutions = (SPHERICAL_BASE_SUBS, ANGLE_BASE_SUBS)
     integration_kwargs = {
         "nx": 3,
         "nphi": 7,
         "lmax": 2,
         "numeric_zero": 1.0e-8,
-        "m_lambda_max": None,
+        "m_lambda_max": 4,
     }
 
     op = Operator()
@@ -43,7 +45,9 @@ def fixture_random_op() -> Operator:
         "substitutions": substitutions,
         "integration_kwargs": integration_kwargs,
     }
-    op.isospin = {(0, 0, 0, 0): 1.0}
+    op.isospin = DataFrame(
+        [{"t_o": 0, "mt_o": 0, "t_i": 0, "mt_i": 0, "val": 1.0}]
+    ).set_index(["t_o", "mt_o", "t_i", "mt_i"])
     op.mesh_info = {"n_p_o": 10, "n_p_i": 5, "q_3": 2}
     op.check()
 
@@ -52,4 +56,11 @@ def fixture_random_op() -> Operator:
 
 def test_decompose_operator(random_op):
     """Exports and imports operator from and to h5. Asserts they are equal."""
-    pass
+    with TemporaryDirectory() as tmpdirname:
+        op_file = path.join(tmpdirname, "test_op.h5")
+
+        write(random_op, op_file)
+        assert path.exists(op_file)
+
+        op = read(op_file)
+        assert op == random_op
