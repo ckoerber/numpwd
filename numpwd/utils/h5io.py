@@ -2,6 +2,7 @@
 from typing import Optional, Union, Dict, Any, Tuple, Callable
 from os import path
 
+
 from numpy import ndarray, array
 from h5py import File, Group, Dataset
 
@@ -76,13 +77,22 @@ class H5ValuePrep:
 
             raise TypeError(f"Don't know how to prepare data of type {type(obj)}")
 
-    def read(self, obj, **kwargs) -> Any:
+    def read(self, dset: Dataset) -> Any:
         """Try parsing data to expected shape."""
+        kwargs = dict(dset.attrs)
         dtype = kwargs.pop("dtype", None)
+        obj = dset[()] if isinstance(dset, Dataset) else dset
         if dtype is not None:
             if dtype not in self.read_registry:
                 raise TypeError(f"Don't know how to read data of type {dtype}")
-            obj = self.read_registry[dtype](obj, **kwargs)
+            try:
+                obj = self.read_registry[dtype](obj, **kwargs)
+            except Exception as exception:
+                print(
+                    f"Failed to parse dset of type: {dtype} with kwargs {kwargs}\n{dset}"
+                )
+                raise exception
+
         return obj
 
 
@@ -139,10 +149,40 @@ def write_data(
     return dsets
 
 
+def parse_groups(container: Union[File, Group, Dataset], data: Dict[str, Any]) -> Any:
+    """Converts nested dict of h5 read groups according to meta attribute."""
+    if not isinstance(container, Group):
+        return data
+
+    dtype = container.attrs.get("dtype", None)
+    if dtype in ("<class 'list'>", "<class 'tuple'>"):
+        ddata = [
+            parse_groups(container[key], data[key]) for key in sorted(container.keys())
+        ]
+        return ddata if dtype == "list" else tuple(ddata)
+    else:
+        return {key: parse_groups(val, data[key]) for key, val in container.items()}
+
+
 def read_data(
     container: Union[File, Group], h5_value_prep: Optional[H5ValuePrep] = None,
 ):
-
+    """Reads h5 export and converts data according to h5_value_prep."""
     h5_value_prep = h5_value_prep if h5_value_prep is not None else H5ValuePrep()
 
-    dsets = get_dsets(container, load_dsets=True)
+    if isinstance(container, Group):
+        dsets = get_dsets(container, load_dsets=False)
+        data = {}
+        for key, val in dsets.items():
+            keys = key.split("/")
+            ddict = data
+            for kkey in keys[:-1]:
+                ddict = ddict.setdefault(kkey, {})
+            ddict[keys[-1]] = h5_value_prep.read(val)
+
+        data = parse_groups(container, data)
+
+    else:
+        data = h5_value_prep.read(container)
+
+    return data

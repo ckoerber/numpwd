@@ -1,6 +1,7 @@
 """Read operators from H5 file."""
 from h5py import File as H5File
 from pandas import DataFrame, Series, read_csv
+from io import StringIO
 
 from sympy import AtomicExpr, Expr, sympify
 from datetime import datetime
@@ -53,14 +54,16 @@ def prep_dataframe(df):
 
 def read_dataframe(arg, **kwargs):
     """Converts csv or array data to dataframe."""
-    if isinstance(arg, str):
-        df = read_csv(arg).astype(kwargs["column_dtypes"])
-    else:
-        df = DataFrame(data=arg, columns=kwargs["columns"]).astype(
-            kwargs["column_dtypes"]
-        )
+    df = (
+        read_csv(StringIO(arg))
+        if isinstance(arg, str)
+        else DataFrame(data=arg, columns=kwargs["columns"])
+    )
 
-    if kwargs["index_col"] in df.columns:
+    if "column_dtypes" in kwargs:
+        df = df.astype(kwargs.get("column_dtypes", None))
+
+    if "index_col" in kwargs and kwargs["index_col"] in df.columns:
         df = df.set_index(kwargs["index_col"])
     return df
 
@@ -113,7 +116,7 @@ def read(filename: str) -> Operator:
         filename: Path and file name to file.
     """
     operator = Operator()
-    with H5File("test.h5", "r") as h5f:
+    with H5File(filename, "r") as h5f:
         for key in ["matrix", "channels", "args", "isospin", "mesh_info", "misc"]:
             setattr(operator, key, read_data(h5f[key], h5_value_prep=H5_VALUE_PREP))
 
