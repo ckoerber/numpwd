@@ -90,7 +90,8 @@ def prep_cupy(array):
 
 def read_cupy(arg, **kwargs):
     """Moves array to GPU if cupy is available. Else CPU."""
-    return cp.array(arg) if cp is not None else arg
+    return arg
+    # return cp.array(arg) if cp is not None else arg
 
 
 PREP_MAP = {
