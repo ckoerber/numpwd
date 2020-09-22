@@ -9,10 +9,11 @@
 
 \section{Operator definitions}
 
-All of the results are very preliminary and I need to run further cross-checks.
-For now, these plots rather indicate the $q^2$ scaling.
+All of the results are very preliminary and may be off by a factor.
+I need to run further cross-checks.
+For now, these plots should rather indicate the $q^2$ scaling.
 
-\subsection{One-Nucleon Elements}
+\subsection{One-Nucleon operators}
 Kinematics for single-nucleon system
 \begin{equation}
     N(\vec p_1) + J(\vec q) \to N(\vec p_1')
@@ -36,7 +37,7 @@ Operator definitions
 \end{align}
 where $\vec \sigma_1$ is the Pauli (spin) matrix of the first nucleon.
 
-\subsection{Two-Nucleon Elements}
+\subsection{Two-Nucleon operators}
 
 Kinematics for two-nucleon system
 \begin{equation}
@@ -83,6 +84,17 @@ and $\vec p_{12} = (\vec p_1 - \vec p_2)/2$
 \end{align}
 
 \section{Wave function}
+
+Example wave function string:
+
+\texttt{compton-dens-4he-chsms-n4lo+-cut=4-pCoul-n2locmpi-Lam=550.000}
+
+\texttt{-c1=-1.230-c3=-4.650-c4=3.280-Lamnum=1.000e+08-tnfcut=3}
+
+\texttt{-om=1.60E+00-th=1.80E+02-nx=20-nphi=16-np12=np34=28+8-np3=44+8-nq4=nq=38+6-}
+
+\texttt{j12max=5-lmax=6-lsummax=12-tau4max=0-rho1b.dat}
+
 \begin{table}[htb!]
     \caption{The following matrix elements will be evaluated for the wave function}
     \label{}
@@ -109,30 +121,48 @@ and $\vec p_{12} = (\vec p_1 - \vec p_2)/2$
 \section{Results}
 
 \subsection{One-nucleon leading contributions}
+
+For the leading 1N contribution $\mathcal{O}_{1N}^{(1)}$ I have performed a polynomial fit to see with which precision one can extract the form factor and radius.
+
+According to a previous mail, I have rescaled the FF to be one at the origin (original norm: $F(0) = 0.9988586308$).
+
+To estimate the uncertainty of the fit parameters, I need to estimate the size of the numerical errors.
+These errors are estimated employing an emperical Bayes scheme (e.g., optimize $\chi^2_{d.o.f} \to 1$ for best fits as a function of the unkown data error).
+I make the assumption that all numerical errors are independent of $q^2$ and uncorrelated (which is likely not true but should suffice as a magnitude of order check).
+For an even polynomial of order 4, I obtain that the \textit{data-error} $\Delta y \approx 5.6 \cdot 10^{-7}$.
+Using this error, I have fitted several even polynomial of order 2 to 8 to the data.
+They seem to stabilize around order 4 though there seems to be a significant difference (not captured by the parameter uncertainty) hoping from order 2 to 4.
+The best value I can extract is
+\begin{equation}
+    r0 = \sqrt{-6 c_1}  = 1.42077(35) [\mathrm{fm}]\,.
+\end{equation}
+However, this estimate makes the assumption that the emperical Bayes method estimates the numerical uncertainty correctly.
+Likely, the data uncertainty is larger and thus the parameter value uncertainty is larger as well.
+
 \begin{figure}[htb!]
     \includegraphics{figs/multi-poly-fit.pdf}
-    \caption{Leading contributions and fit.}
+    \caption{Leading 1N contributions and FF fit.}
     \label{}
 \end{figure}
 
 \subsection{One-nucleon subleading contributions}
 \begin{figure}[htb!]
     \includegraphics{figs/1n-nlo.pdf}
-    \caption{Subleading contributions.}
+    \caption{Subleading 1N contributions.}
     \label{}
 \end{figure}
 
 \subsection{Two-nucleon one-pion exchange}
 \begin{figure}[htb!]
     \includegraphics{figs/2n-ope.pdf}
-    \caption{Differnt 2N OPE contributions.}
+    \caption{2N OPE contributions for infinite cutoff.}
     \label{}
 \end{figure}
 
 \subsection{Two-nucleon contact}
 \begin{figure}[htb!]
     \includegraphics{figs/2n-contact.pdf}
-    \caption{Differnt 2N contact contributions.}
+    \caption{2N contact contributions for cutoff matching wave function.}
     \label{}
 \end{figure}
 
