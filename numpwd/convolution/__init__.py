@@ -28,7 +28,11 @@ def convolute(dens: Density, op: Operator, tol: float = 1.0e-7) -> np.ndarray:
     idx1, idx2 = get_channel_overlap_indices(dens.channels, op.channels)
 
     # Compute the isospin matrix element
-    iso_fact = pd.merge(dens.channels.loc[idx1], op.isospin, how="inner")["iso"].values
+    iso_fact = (
+        pd.merge(dens.channels.loc[idx1], op.isospin, how="left")["iso"]
+        .fillna(0)
+        .values
+    )
     weight = (dens.p ** 2 * dens.wp).reshape(-1, 1)
     weight = weight.T * weight
     return (
