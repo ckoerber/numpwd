@@ -98,6 +98,18 @@ class ReducedAngularPolynomial:
         if gpu and cp is None:
             raise ValueError("Could not load cupy but specified gpu backend.")
 
+        if len(phi) <= lmax:
+            raise ValueError(
+                "Angular phi mesh to small to ensure orhtonormality:"
+                " nphi must be > lmax."
+            )
+
+        if len(x) <= lmax:
+            raise ValueError(
+                "Angular phi mesh to small to ensure orhtonormality:"
+                " nx must be > lmax."
+            )
+
         self.x = x
         self.phi = phi
         self.wx = wx
