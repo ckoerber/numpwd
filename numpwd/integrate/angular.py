@@ -290,11 +290,8 @@ class ReducedAngularPolynomial:
                 LOGGER.debug("Dividing up integration into %d chunks.", chunks)
 
         out = {}
-        for channels_chunk, kernel_chunk in tqdm(
-            zip(
-                np.array_split(self.channels[mask], chunks),
-                np.array_split(kernel, chunks),
-            )
+        for channels_chunk, kernel_chunk in zip(
+            np.array_split(self.channels[mask], chunks), np.array_split(kernel, chunks),
         ):
             res_chunk = (kernel_chunk * matrix.reshape(1, *mat_shape)).sum(
                 axis=(-3, -2, -1)
