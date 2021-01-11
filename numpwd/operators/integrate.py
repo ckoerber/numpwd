@@ -4,6 +4,8 @@ from functools import lru_cache
 from itertools import product
 from logging import getLogger
 
+from tqdm import tqdm
+
 from numpy import ndarray, abs, array
 from pandas import DataFrame
 from sympy import S, Function
@@ -62,19 +64,27 @@ class Integrator:
         self.real_only = real_only
         self.adaptive_chunks = adaptive_chunks
 
-    def _integrate(self, expr):
+    def _integrate(self, expr, spin_momentum_factor: Optional[S] = None):
+        """Integrate expression over all angular grids including Ylm weight.
+
+        spin_momentum_factor: Expr
+            Factor which does not depend on Phi
+        """
         LOGGER.debug("Integrating: %s", expr)
         data = []
         for m_lambda in range(-self.m_lambda_max, self.m_lambda_max + 1):
             big_phi_integrated = integrate(
-                expr * self.pwd_fact_lambda.subs({"mla": m_lambda}), ("Phi", 0, "2*pi")
+                expr * self.pwd_fact_lambda.subs({"mla": m_lambda}), ("Phi", 0, "2*pi"),
             )
+
             LOGGER.debug("m_lambda=%d -> %s", m_lambda, big_phi_integrated)
             if big_phi_integrated:
+                if spin_momentum_factor is not None:
+                    big_phi_integrated *= spin_momentum_factor
                 fcn = ExpressionMap(big_phi_integrated, self._args)
                 tensor = fcn(*self._values)
                 res = self.poly.integrate(
-                    tensor, m_lambda, adaptive_chunks=self.adaptive_chunks
+                    tensor, m_lambda, adaptive_chunks=self.adaptive_chunks,
                 )
             else:
                 res = dict()
@@ -103,12 +113,12 @@ class Integrator:
         return data
 
     @lru_cache(maxsize=128)
-    def _integrated_cached(self, expr):
-        return self._integrate(expr)
+    def _integrated_cached(self, expr, spin_momentum_factor: Optional[S] = None):
+        return self._integrate(expr, spin_momentum_factor=spin_momentum_factor)
 
-    def __call__(self, expr):
+    def __call__(self, expr, spin_momentum_factor: Optional[S] = None):
         """Integrates out all angular dependence of expression."""
-        return self._func(expr)
+        return self._func(expr, spin_momentum_factor=spin_momentum_factor)
 
 
 def integrate_spin_decomposed_operator(
@@ -123,6 +133,7 @@ def integrate_spin_decomposed_operator(
     real_only: bool = True,
     adaptive_chunks: bool = True,
     gpu: bool = False,
+    spin_momentum_factor: Optional[str] = None,
 ) -> Tuple[DataFrame, ndarray]:
     r"""Runs angular integrals and contracts ls to j for spin decomposed two-nucleon operator.
 
@@ -248,9 +259,11 @@ def integrate_spin_decomposed_operator(
     )
 
     tmp = dict()
-    for spin_channel in spe:
+    for spin_channel in tqdm(spe, desc="Spin channel"):
         spin_channel = spin_channel.copy()
-        for angular_channel in integrator(spin_channel.pop("expr")):
+        for angular_channel in integrator(
+            spin_channel.pop("expr"), spin_momentum_factor=spin_momentum_factor,
+        ):
             ranges = {
                 "j_o": get_j_range(spin_channel["s_o"], angular_channel["l_o"]),
                 "j_i": get_j_range(spin_channel["s_i"], angular_channel["l_i"]),
