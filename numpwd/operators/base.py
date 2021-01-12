@@ -2,8 +2,13 @@
 from typing import Dict, Tuple, List
 from dataclasses import dataclass, field
 
-from numpy import array, ndarray
+from numpy import array, ndarray, allclose
 from pandas import DataFrame
+
+try:
+    import cupy as cp
+except ImportError:
+    cp = None
 
 CHANNEL_COLUMNS = [
     "l_o",
@@ -48,7 +53,7 @@ class Operator:
     misc: Dict[str, float] = field(default_factory=dict)
 
     def check(self):
-        """Runs checks if density was properly initialized."""
+        """Run checks if density was properly initialized."""
         if not isinstance(self.matrix, ndarray) or len(self.matrix) == 0:
             raise ValueError("Matrix was not initialized")
 
@@ -70,5 +75,65 @@ class Operator:
                     f"Operator argument {key} shape does not match matrix shape."
                 )
 
-        if not self.isospin:
+        if self.isospin is None or len(self.isospin) == 0:
             raise KeyError("Isospin matrix is empty")
+
+    def __eq__(self, other):
+        """Check if all attributes are equal within numeric precision."""
+        if not isinstance(other, Operator):
+            return NotImplemented
+
+        if self.mesh_info != other.mesh_info:
+            return False
+
+        if self.misc != other.misc:
+            return False
+
+        if len(self.args) == len(other.args):
+            for (k1, v1), (k2, v2) in zip(self.args, other.args):
+                if k1 != k2 or not allclose(v1, v2, rtol=1.0e-12, atol=0.0):
+                    return False
+
+        if not self.channels.equals(other.channels):
+            return False
+
+        if isinstance(self.isospin, DataFrame):
+            if not self.isospin.equals(other.isospin):
+                return False
+        else:
+            return self.isospin == other.isospin
+
+        if not allclose(self.matrix, other.matrix, rtol=1.0e-12, atol=0.0):
+            return False
+
+        return True
+
+    def to_gpu(self):
+        """Move all matrix components to the GPU if possibe.
+
+        Moves args and matrix attrubitue to gpu.
+        Raises import error if cupy not present.
+        """
+        if cp is None:
+            raise ImportError("Failed to import cupy")
+
+        self.matrix = cp.array(self.matrix)
+        new_args = []
+        for arg in self.args:
+            new_args.append((arg[0], cp.array(arg[1])))
+        self.args = new_args
+
+    def to_cpu(self):
+        """Move all matrix components to the CPU if possibe.
+
+        Moves args and matrix attrubitue to cpu.
+        """
+        if isinstance(self.matrix, cp.ndarray):
+            self.matrix = self.matrix.get()
+        new_args = []
+        for arg in self.args:
+            key, val = arg
+            if isinstance(val, cp.ndarray):
+                val = val.get()
+            new_args.append((key, val))
+        self.args = new_args

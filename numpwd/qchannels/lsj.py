@@ -34,11 +34,11 @@ def get_two_n_channels(
     j_max = l_max + s_max if j_max is None else j_max
 
     assert (
-        l_max > 0
+        l_max >= 0
         and isinstance(l_max, int)
-        and s_max > 0
+        and s_max >= 0
         and isinstance(s_max, int)
-        and j_max > 0
+        and j_max >= 0
         and isinstance(j_max, int)
     )
 

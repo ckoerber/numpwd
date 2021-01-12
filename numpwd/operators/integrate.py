@@ -4,9 +4,11 @@ from functools import lru_cache
 from itertools import product
 from logging import getLogger
 
+from tqdm import tqdm
+
 from numpy import ndarray, abs, array
 from pandas import DataFrame
-from sympy import S, Function
+from sympy import S, Function, Symbol
 
 from numpwd.integrate.analytic import integrate, cached_integrate
 
@@ -23,6 +25,11 @@ FACT *= CG("l_i", "ml_i", "s_i", "ms_i", "j_i", "mj_i")
 FACT *= CG("l_i", "ml_i", "la", "mla", "l_o", "ml_o")
 
 LOGGER = getLogger("numpwd")
+try:
+    import cupy as cp
+except ImportError:
+    LOGGER.debug("Cupy not available")
+    cp = None
 
 
 class Integrator:
@@ -37,6 +44,7 @@ class Integrator:
         use_cache: bool = True,
         numeric_zero: float = 1.0e-14,
         real_only: bool = True,
+        adaptive_chunks: bool = True,
     ):
         """Initialize angular ingrator with given mesh."""
         self.poly = red_ang_poly
@@ -54,27 +62,56 @@ class Integrator:
         self._values += (self.poly.x, self.poly.x, self.poly.phi)
         self.numeric_zero = numeric_zero
         self.real_only = real_only
+        self.adaptive_chunks = adaptive_chunks
 
-    def _integrate(self, expr):
-        LOGGER.debug("Integrating: %s", expr)
+        self.use_gpu = cp is not None and all(
+            [isinstance(arg[1], cp.ndarray) for arg in args]
+        )
+
+    def _integrate(
+        self, expr, spin_momentum_factor: Optional[S] = None, gpu: bool = False
+    ):
+        """Integrate expression over all angular grids including Ylm weight.
+
+        spin_momentum_factor: Expr
+            Factor which does not depend on Phi
+        """
+        string = f"* {spin_momentum_factor}" if spin_momentum_factor is not None else ""
+        LOGGER.debug("Integrating: %s %s", expr, string)
         data = []
+
+        if (
+            spin_momentum_factor is not None
+            and Symbol("Phi") in spin_momentum_factor.free_symbols
+        ):
+            raise AssertionError(
+                "'Phi' should not be present in the spin_momentum_factor"
+            )
+
+        absolute = cp.abs if gpu else abs
+
         for m_lambda in range(-self.m_lambda_max, self.m_lambda_max + 1):
             big_phi_integrated = integrate(
-                expr * self.pwd_fact_lambda.subs({"mla": m_lambda}), ("Phi", 0, "2*pi")
+                expr * self.pwd_fact_lambda.subs({"mla": m_lambda}), ("Phi", 0, "2*pi"),
             )
+
             LOGGER.debug("m_lambda=%d -> %s", m_lambda, big_phi_integrated)
             if big_phi_integrated:
+                if spin_momentum_factor is not None:
+                    big_phi_integrated *= spin_momentum_factor
                 fcn = ExpressionMap(big_phi_integrated, self._args)
                 tensor = fcn(*self._values)
-                res = self.poly.integrate(tensor, m_lambda)
+                res = self.poly.integrate(
+                    tensor, m_lambda, adaptive_chunks=self.adaptive_chunks,
+                )
             else:
                 res = dict()
             for (l_o, l_i, la, mla), matrix in res.items():
 
-                if (abs(matrix) < self.numeric_zero).all():
+                if (absolute(matrix) < self.numeric_zero).all():
                     continue
                 if self.real_only:
-                    if (abs(matrix.imag) > self.numeric_zero).any():
+                    if (absolute(matrix.imag) > self.numeric_zero).any():
                         raise AssertionError(
                             "Specified to return real data but imag of components for"
                             f" l_o={l_o}, l_i={l_i}, lambda={la}, m_lambda={mla}"
@@ -91,15 +128,20 @@ class Integrator:
                         "matrix": matrix,
                     }
                 )
+
         return data
 
     @lru_cache(maxsize=128)
-    def _integrated_cached(self, expr):
-        return self._integrate(expr)
+    def _integrated_cached(
+        self, expr, spin_momentum_factor: Optional[S] = None, gpu: bool = False
+    ):
+        return self._integrate(expr, spin_momentum_factor=spin_momentum_factor, gpu=gpu)
 
-    def __call__(self, expr):
+    def __call__(self, expr, spin_momentum_factor: Optional[S] = None):
         """Integrates out all angular dependence of expression."""
-        return self._func(expr)
+        return self._func(
+            expr, spin_momentum_factor=spin_momentum_factor, gpu=self.use_gpu
+        )
 
 
 def integrate_spin_decomposed_operator(
@@ -112,6 +154,9 @@ def integrate_spin_decomposed_operator(
     cache_integrals: bool = True,
     numeric_zero: float = 1.0e-14,
     real_only: bool = True,
+    adaptive_chunks: bool = True,
+    gpu: bool = False,
+    spin_momentum_factor: Optional[str] = None,
 ) -> Tuple[DataFrame, ndarray]:
     r"""Runs angular integrals and contracts ls to j for spin decomposed two-nucleon operator.
 
@@ -197,6 +242,12 @@ def integrate_spin_decomposed_operator(
             specifying which (ls)j quantum numbers correspond to which matrix entry
             (index of df == first index of matrix).
     """
+    if gpu and cp is None:
+        raise ValueError("Specified gpu backend but cupy not found.")
+
+    # convert arguments to arrays on respective architecture
+    _args = [(a[0], cp.array(a[1]) if gpu else array(a[1])) for a in args]
+
     # check arguments
     #   Check spin
     spe = spin_momentum_expressions.copy()
@@ -219,23 +270,29 @@ def integrate_spin_decomposed_operator(
 
     # Allocate integration class
     angular_info = {}
-    angular_info["x"], angular_info["wx"] = get_x_mesh(nx)
-    angular_info["phi"], angular_info["wphi"] = get_phi_mesh(nphi)
-    red_ang_poly = ReducedAngularPolynomial(**angular_info, lmax=lmax)
+    angular_info["x"], angular_info["wx"] = get_x_mesh(nx, gpu=gpu)
+    angular_info["phi"], angular_info["wphi"] = get_phi_mesh(nphi, gpu=gpu)
+    red_ang_poly = ReducedAngularPolynomial(**angular_info, lmax=lmax, gpu=gpu)
+
     m_lambda_max = m_lambda_max if m_lambda_max is not None else 2 * lmax
     integrator = Integrator(
         red_ang_poly=red_ang_poly,
-        args=args,
+        args=_args,
         m_lambda_max=m_lambda_max,
         use_cache=cache_integrals,
         real_only=real_only,
         numeric_zero=numeric_zero,
+        adaptive_chunks=adaptive_chunks,
     )
 
+    absolute = cp.abs if gpu else abs
+
     tmp = dict()
-    for spin_channel in spe:
+    for spin_channel in tqdm(spe, desc="Spin channel"):
         spin_channel = spin_channel.copy()
-        for angular_channel in integrator(spin_channel.pop("expr")):
+        for angular_channel in integrator(
+            spin_channel.pop("expr"), spin_momentum_factor=spin_momentum_factor,
+        ):
             ranges = {
                 "j_o": get_j_range(spin_channel["s_o"], angular_channel["l_o"]),
                 "j_i": get_j_range(spin_channel["s_i"], angular_channel["l_i"]),
@@ -274,11 +331,11 @@ def integrate_spin_decomposed_operator(
     channels = []
     for channel in sorted(tmp):
         mat = tmp[channel]
-        if (abs(mat) > numeric_zero).any():
+        if (absolute(mat) > numeric_zero).any():
             channels.append(channel)
             matrix.append(mat)
 
     return (
         DataFrame(data=channels, columns=channel_columns),
-        array(matrix),
+        array(matrix) if not gpu else cp.array(matrix),
     )

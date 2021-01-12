@@ -40,9 +40,12 @@ def read_h5(filename: str) -> Density:
     density.p = dsets.pop("p12p")
     density.wp = dsets.pop("p12w")
 
-    density.mesh_info = {
-        "meshtype": "".join(map(lambda el: el.decode(), dsets.pop("meshtype")))
-    }
+    meshtype = dsets.pop("meshtype")
+    if meshtype.dtype == "S1":
+        meshtype = meshtype.tostring().decode("UTF-8")
+    elif isinstance(meshtype[0], str):
+        meshtype = "".join(meshtype)
+    density.mesh_info = {"meshtype": meshtype}
     if density.mesh_info["meshtype"] == "TRNS":
         for key in ["n1", "n2", "ntot", "p1", "p2", "p3"]:
             density.mesh_info[key] = dsets.pop(f"p12{key}")

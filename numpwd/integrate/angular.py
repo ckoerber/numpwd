@@ -3,6 +3,9 @@ from typing import Dict, Tuple, Optional
 
 from itertools import product
 from warnings import warn
+from logging import getLogger
+
+from numpwd.utils.backend import get_available_memory
 
 import numpy as np
 from numpy.polynomial.legendre import leggauss
@@ -13,26 +16,43 @@ from pandas import DataFrame
 
 from numpwd.qchannels.cg import get_cg as cg
 
+LOGGER = getLogger("numpwd")
 
-def get_x_mesh(nx: int) -> Tuple[np.ndarray, np.ndarray]:
-    r"""Returns Legendre Gauss mesh for \\(x \\in [0, 1]\\) angle.
+try:
+    import cupy as cp
+except ImportError:
+    LOGGER.debug("Cupy not available")
+    cp = None
+
+
+def get_x_mesh(nx: int, gpu: bool = False) -> Tuple[np.ndarray, np.ndarray]:
+    r"""Return Legendre Gauss mesh for \\(x \\in [0, 1]\\) angle.
 
     Returns:
         x: The angle variable
         wx: The integration weight
     """
-    return leggauss(nx)
+    if gpu and cp is None:
+        raise ValueError("Could not load cupy but specified gpu backend.")
+    x, wx = leggauss(nx)
+    if gpu:
+        x, wx = cp.array(x), cp.array(wx)
+    return x, wx
 
 
-def get_phi_mesh(nphi: int) -> Tuple[np.ndarray, np.ndarray]:
-    r"""Returns linear mesh for \\(\\phi \\in [0, 2 \\pi]\\) angle.
+def get_phi_mesh(nphi: int, gpu: bool = False) -> Tuple[np.ndarray, np.ndarray]:
+    r"""Return linear mesh for \\(\\phi \\in [0, 2 \\pi]\\) angle.
 
     Returns:
         phi: The angle variable
         wphi: The integration weight
     """
+    if gpu and cp is None:
+        raise ValueError("Could not load cupy but specified gpu backend.")
     phi = np.arange(0, nphi) * 2 * np.pi / nphi
     wphi = np.ones(nphi) * 2 * np.pi / nphi
+    if gpu:
+        phi, wphi = cp.array(phi), cp.array(wphi)
     return phi, wphi
 
 
@@ -77,20 +97,43 @@ class ReducedAngularPolynomial:
         lmax: int = 4,
         wx: Optional[np.ndarray] = None,
         wphi: Optional[np.ndarray] = None,
+        gpu: bool = False,
     ):
         """Allocates the angular matrix element."""
         self._iter = 0
 
-        self.x = x
-        self.phi = phi
-        self.wx = wx
-        self.wphi = wphi
+        if gpu and cp is None:
+            raise ValueError("Could not load cupy but specified gpu backend.")
+        self.gpu = gpu
+
+        if len(phi) <= lmax:
+            raise ValueError(
+                "Angular phi mesh to small to ensure orhtonormality:"
+                " nphi must be > lmax."
+            )
+
+        if len(x) <= lmax:
+            raise ValueError(
+                "Angular phi mesh to small to ensure orhtonormality:"
+                " nx must be > lmax."
+            )
 
         self.lmax = lmax
 
         self.columns = None
         self.nchannels = None
         self._allocate_channels()
+
+        self.x = x
+        self.phi = phi
+        self.wx = wx
+        self.wphi = wphi
+
+        if self.gpu:
+            self.x = cp.array(self.x)
+            self.phi = cp.array(self.phi)
+            self.wx = cp.array(self.wx) if wx is not None else self.wx
+            self.wphi = cp.array(self.wphi) if wphi is not None else self.wphi
 
         self.matrix = None
         self._allocate_matrix()
@@ -120,12 +163,13 @@ class ReducedAngularPolynomial:
         nx = len(self.x)
         nphi = len(self.phi)
 
-        self.matrix = np.zeros(
-            shape=(self.nchannels, nx, nx, nphi), dtype=np.complex128
+        backend = cp if self.gpu else np
+        self.matrix = backend.zeros(
+            shape=(self.nchannels, nx, nx, nphi), dtype="complex128"
         )
 
         # Put half here because np.exp(-1j * np.pi) / np.exp(-2j * np.pi) ** (1/2) == -1
-        e_i_phi_half = np.exp(1j * self.phi / 2).reshape((1, 1, nphi))
+        e_i_phi_half = backend.exp(1j * self.phi / 2).reshape((1, 1, nphi))
 
         phi = 0
         theta = np.arccos(self.x)  # pylint: disable=E1111
@@ -139,7 +183,11 @@ class ReducedAngularPolynomial:
                 # ---> left is physics, right is scipy <---
                 # The scipy call structure is thus sph_harm(m, n, theta, phi)
                 # which means we want sph_harm(ml, l, phi, theta)
-                yml = sph_harm(ml, ll, phi, theta)
+                yml = (
+                    cp.array(sph_harm(ml, ll, phi, theta.get()))
+                    if self.gpu
+                    else sph_harm(ml, ll, phi, theta)
+                )
                 ylmo[ll, ml] = yml.reshape((nx, 1, 1))
                 ylmi[ll, ml] = yml.reshape((1, nx, 1))
 
@@ -175,7 +223,7 @@ class ReducedAngularPolynomial:
         return self.channel_df.loc[ii].to_dict(), self.matrix[ii]
 
     def integrate(
-        self, matrix: np.ndarray, mla: int, max_chunk_size: Optional[int] = None,
+        self, matrix: np.ndarray, mla: int, adaptive_chunks: bool = True,
     ):
         r"""Runs angular integrations against provided matrix.
 
@@ -228,15 +276,37 @@ class ReducedAngularPolynomial:
             len(self.wphi),
         )
 
-        max_chunk_size = max_chunk_size or len(mask)
-        chunks = len(mask) // max_chunk_size
+        if (
+            cp is not None
+            and isinstance(matrix, cp.ndarray)
+            and not isinstance(kernel, cp.ndarray)
+        ):
+            LOGGER.debug("Porting angular poly kernel to GPU")
+            kernel = cp.array(kernel)
+
+        chunks = 1
+        if adaptive_chunks:
+            LOGGER.debug("Adaptively setting size of array.")
+            matrix_size = np.product(mat_shape) * len(mask)
+            total_bytes = matrix_size * 2 * 16  # two matrices of this size, complex
+
+            mem = get_available_memory(
+                gpu=cp is not None and isinstance(matrix, cp.ndarray)
+            )
+
+            LOGGER.debug("Available memory: %1.2f GB.", mem / 1024 ** 3)
+            LOGGER.debug("Expected array sizes: %1.2f GB.", total_bytes / 1024 ** 3)
+
+            if total_bytes > 0.9 * mem:
+                chunks = int(total_bytes / (0.9 * mem))
+                LOGGER.debug("Dividing up integration into %d chunks.", chunks)
 
         out = {}
         for channels_chunk, kernel_chunk in zip(
             np.array_split(self.channels[mask], chunks), np.array_split(kernel, chunks),
         ):
-            res_chunk = np.sum(
-                kernel_chunk * matrix.reshape(1, *mat_shape), axis=(-3, -2, -1),
+            res_chunk = (kernel_chunk * matrix.reshape(1, *mat_shape)).sum(
+                axis=(-3, -2, -1)
             )
             for channel, res in zip(channels_chunk, res_chunk):
                 out[tuple(channel)] = res
