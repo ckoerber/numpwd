@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 from numpy import ndarray, abs, array
 from pandas import DataFrame
-from sympy import S, Function
+from sympy import S, Function, Symbol
 
 from numpwd.integrate.analytic import integrate, cached_integrate
 
@@ -76,8 +76,17 @@ class Integrator:
         spin_momentum_factor: Expr
             Factor which does not depend on Phi
         """
-        LOGGER.debug("Integrating: %s", expr)
+        string = f"* {spin_momentum_factor}" if spin_momentum_factor is not None else ""
+        LOGGER.debug("Integrating: %s %s", expr, string)
         data = []
+
+        if (
+            spin_momentum_factor is not None
+            and Symbol("Phi") in spin_momentum_factor.free_symbols
+        ):
+            raise AssertionError(
+                "'Phi' should not be present in the spin_momentum_factor"
+            )
 
         absolute = cp.abs if gpu else abs
 
