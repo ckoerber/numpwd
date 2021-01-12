@@ -3,7 +3,12 @@ from typing import Dict, Tuple, List
 from dataclasses import dataclass, field
 
 from numpy import array, ndarray, allclose
-from pandas import DataFrame, Series
+from pandas import DataFrame
+
+try:
+    import cupy as cp
+except ImportError:
+    cp = None
 
 CHANNEL_COLUMNS = [
     "l_o",
@@ -48,7 +53,7 @@ class Operator:
     misc: Dict[str, float] = field(default_factory=dict)
 
     def check(self):
-        """Runs checks if density was properly initialized."""
+        """Run checks if density was properly initialized."""
         if not isinstance(self.matrix, ndarray) or len(self.matrix) == 0:
             raise ValueError("Matrix was not initialized")
 
@@ -74,7 +79,7 @@ class Operator:
             raise KeyError("Isospin matrix is empty")
 
     def __eq__(self, other):
-        """Checks if all attributes are equal within numeric precision."""
+        """Check if all attributes are equal within numeric precision."""
         if not isinstance(other, Operator):
             return NotImplemented
 
@@ -99,3 +104,29 @@ class Operator:
             return False
 
         return True
+
+    def to_gpu(self):
+        """Move all matrix components to the GPU if possibe.
+
+        Moves args and matrix attrubitue to gpu.
+        Raises import error if cupy not present.
+        """
+        if cp is None:
+            raise ImportError("Failed to import cupy")
+
+        self.matrix = cp.array(self.matrix)
+        new_args = []
+        for arg in self.args:
+            new_args.append((arg[0], cp.array(arg[1])))
+        self.args = new_args
+
+    def to_cpu(self):
+        """Move all matrix components to the CPU if possibe.
+
+        Moves args and matrix attrubitue to cpu.
+        """
+        self.matrix = array(self.matrix)
+        new_args = []
+        for arg in self.args:
+            new_args.append((arg[0], array(arg[1])))
+        self.args = new_args
