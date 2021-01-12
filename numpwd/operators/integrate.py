@@ -158,7 +158,7 @@ def integrate_spin_decomposed_operator(
     gpu: bool = False,
     spin_momentum_factor: Optional[str] = None,
 ) -> Tuple[DataFrame, ndarray]:
-    r"""Runs angular integrals and contracts ls to j for spin decomposed two-nucleon operator.
+    r"""Run angular integrals and PWD for spin decomposed two-nucleon operator.
 
     Computes
     $$
@@ -237,6 +237,13 @@ def integrate_spin_decomposed_operator(
 
         real_only: Return real components of matrix only. Raises an error if imaginary
             parts are larger than ``numeric_zero``.
+
+        spin_momentum_factor: Sometimes, it can be beneficial to seperate operator
+            expressions into a ``Phi`` dependent and indepenent part to speed up
+            integrations. While the argument ``spin_momentum_expressions`` should contain
+            the ``Phi`` dependence, ``spin_momentum_factor`` should not.
+            The result of the ``Phi`` inegration is multiplied with this factor.
+            It is the same for all channels.
 
         Returns: Channels and matrix of the operator. Channels are a data frame
             specifying which (ls)j quantum numbers correspond to which matrix entry
