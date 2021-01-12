@@ -64,7 +64,13 @@ class Integrator:
         self.real_only = real_only
         self.adaptive_chunks = adaptive_chunks
 
-    def _integrate(self, expr, spin_momentum_factor: Optional[S] = None):
+        self.use_gpu = cp is not None and all(
+            [isinstance(arg[1], cp.ndarray) for arg in args]
+        )
+
+    def _integrate(
+        self, expr, spin_momentum_factor: Optional[S] = None, gpu: bool = False
+    ):
         """Integrate expression over all angular grids including Ylm weight.
 
         spin_momentum_factor: Expr
@@ -72,6 +78,9 @@ class Integrator:
         """
         LOGGER.debug("Integrating: %s", expr)
         data = []
+
+        absolute = cp.abs if gpu else abs
+
         for m_lambda in range(-self.m_lambda_max, self.m_lambda_max + 1):
             big_phi_integrated = integrate(
                 expr * self.pwd_fact_lambda.subs({"mla": m_lambda}), ("Phi", 0, "2*pi"),
@@ -90,10 +99,10 @@ class Integrator:
                 res = dict()
             for (l_o, l_i, la, mla), matrix in res.items():
 
-                if (abs(matrix) < self.numeric_zero).all():
+                if (absolute(matrix) < self.numeric_zero).all():
                     continue
                 if self.real_only:
-                    if (abs(matrix.imag) > self.numeric_zero).any():
+                    if (absolute(matrix.imag) > self.numeric_zero).any():
                         raise AssertionError(
                             "Specified to return real data but imag of components for"
                             f" l_o={l_o}, l_i={l_i}, lambda={la}, m_lambda={mla}"
@@ -110,15 +119,20 @@ class Integrator:
                         "matrix": matrix,
                     }
                 )
+
         return data
 
     @lru_cache(maxsize=128)
-    def _integrated_cached(self, expr, spin_momentum_factor: Optional[S] = None):
-        return self._integrate(expr, spin_momentum_factor=spin_momentum_factor)
+    def _integrated_cached(
+        self, expr, spin_momentum_factor: Optional[S] = None, gpu: bool = False
+    ):
+        return self._integrate(expr, spin_momentum_factor=spin_momentum_factor, gpu=gpu)
 
     def __call__(self, expr, spin_momentum_factor: Optional[S] = None):
         """Integrates out all angular dependence of expression."""
-        return self._func(expr, spin_momentum_factor=spin_momentum_factor)
+        return self._func(
+            expr, spin_momentum_factor=spin_momentum_factor, gpu=self.use_gpu
+        )
 
 
 def integrate_spin_decomposed_operator(
@@ -222,6 +236,9 @@ def integrate_spin_decomposed_operator(
     if gpu and cp is None:
         raise ValueError("Specified gpu backend but cupy not found.")
 
+    # convert arguments to arrays on respective architecture
+    _args = [(a[0], cp.array(a[1]) if gpu else array(a[1])) for a in args]
+
     # check arguments
     #   Check spin
     spe = spin_momentum_expressions.copy()
@@ -244,19 +261,22 @@ def integrate_spin_decomposed_operator(
 
     # Allocate integration class
     angular_info = {}
-    angular_info["x"], angular_info["wx"] = get_x_mesh(nx)
-    angular_info["phi"], angular_info["wphi"] = get_phi_mesh(nphi)
+    angular_info["x"], angular_info["wx"] = get_x_mesh(nx, gpu=gpu)
+    angular_info["phi"], angular_info["wphi"] = get_phi_mesh(nphi, gpu=gpu)
     red_ang_poly = ReducedAngularPolynomial(**angular_info, lmax=lmax, gpu=gpu)
+
     m_lambda_max = m_lambda_max if m_lambda_max is not None else 2 * lmax
     integrator = Integrator(
         red_ang_poly=red_ang_poly,
-        args=args,
+        args=_args,
         m_lambda_max=m_lambda_max,
         use_cache=cache_integrals,
         real_only=real_only,
         numeric_zero=numeric_zero,
         adaptive_chunks=adaptive_chunks,
     )
+
+    absolute = cp.abs if gpu else abs
 
     tmp = dict()
     for spin_channel in tqdm(spe, desc="Spin channel"):
@@ -302,7 +322,7 @@ def integrate_spin_decomposed_operator(
     channels = []
     for channel in sorted(tmp):
         mat = tmp[channel]
-        if (abs(mat) > numeric_zero).any():
+        if (absolute(mat) > numeric_zero).any():
             channels.append(channel)
             matrix.append(mat)
 
