@@ -97,8 +97,11 @@ class Operator:
         if not self.channels.equals(other.channels):
             return False
 
-        if not self.isospin.equals(other.isospin):
-            return False
+        if isinstance(self.isospin, DataFrame):
+            if not self.isospin.equals(other.isospin):
+                return False
+        else:
+            return self.isospin == other.isospin
 
         if not allclose(self.matrix, other.matrix, rtol=1.0e-12, atol=0.0):
             return False
@@ -125,8 +128,12 @@ class Operator:
 
         Moves args and matrix attrubitue to cpu.
         """
-        self.matrix = array(self.matrix)
+        if isinstance(self.matrix, cp.ndarray):
+            self.matrix = self.matrix.get()
         new_args = []
         for arg in self.args:
-            new_args.append((arg[0], array(arg[1])))
+            key, val = arg
+            if isinstance(val, cp.ndarray):
+                val = val.get()
+            new_args.append((key, val))
         self.args = new_args
