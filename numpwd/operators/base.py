@@ -193,7 +193,14 @@ def add(op1: Operator, op2: Operator, check: bool = False):
         assert k1 == k2
         assert allclose(v1, v2)
 
-    assert all(op1.isospin == op2.isospin)
+    if isinstance(op1.isospin, DataFrame):
+        assert not op1.isospin.equals(op2.isospin)
+    else:
+        iso_equals = op1.isospin == op2.isospin
+        if hasattr(iso_equals, "__iter__"):
+            assert all(iso_equals)
+        else:
+            assert iso_equals
 
     new_channels = merge(
         op1.channels.reset_index(),
