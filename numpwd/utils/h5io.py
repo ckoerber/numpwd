@@ -93,6 +93,12 @@ class H5ValuePrep:
                 )
                 raise exception
 
+        if isinstance(obj, bytes):
+            try:
+                obj = obj.decode("UTF-8")
+            except Exception as e:
+                print(e)
+
         return obj
 
 
