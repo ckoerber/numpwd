@@ -14,9 +14,15 @@ def convolute(dens: Density, op: Operator, tol: float = 1.0e-7) -> np.ndarray:
         matrix = op.matrix
     if len(op.matrix.shape) == 4:
         assert op.args[2][0] in ("k", "q", "qval")
-        q_diff = np.abs(op.args[2][1] - dens.current_info["qval"])
+        qval = dens.current_info["qval"]
+        q_diff = np.abs(op.args[2][1] - qval)
         q_idx = np.argmin(q_diff)
-        assert q_diff[q_idx] < tol
+        if q_diff[q_idx] > tol:
+            raise ValueError(
+                "Was not able to find matching current momenta for"
+                f" density {dens} and operator {op} at tolerance {tol}."
+                f" best match {q_diff[q_idx]} for {qval} and {op.args[2][1]}"
+            )
         matrix = op.matrix[:, :, :, q_idx]
 
     assert isinstance(op.isospin, pd.DataFrame)
