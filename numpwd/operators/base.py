@@ -194,7 +194,7 @@ def add(op1: Operator, op2: Operator, check: bool = False):
         assert allclose(v1, v2)
 
     if isinstance(op1.isospin, DataFrame):
-        assert not op1.isospin.equals(op2.isospin)
+        assert op1.isospin.equals(op2.isospin)
     else:
         iso_equals = op1.isospin == op2.isospin
         if hasattr(iso_equals, "__iter__"):
@@ -210,8 +210,8 @@ def add(op1: Operator, op2: Operator, check: bool = False):
         right_on=CHANNEL_COLUMNS,
         suffixes=("1", "2"),
     )
-    idx1 = new_channels["index1"].fillna(-1).astype(int)
-    idx2 = new_channels["index2"].fillna(-1).astype(int)
+    idx1 = new_channels["index1"].fillna(-1).astype(int).values
+    idx2 = new_channels["index2"].fillna(-1).astype(int).values
     new_channels = new_channels.drop(["index1", "index2"], axis=1)
 
     shape = tuple([len(new_channels)] + shape1)
