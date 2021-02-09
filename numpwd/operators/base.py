@@ -180,6 +180,12 @@ def add(op1: Operator, op2: Operator, check: bool = False):
         op1.check()
         op2.check()
 
+    op1_on_gpu = isinstance(op1.matrix, cp.ndarray) if cp is not None else False
+    op2_on_gpu = isinstance(op2.matrix, cp.ndarray) if cp is not None else False
+
+    if op1_on_gpu != op2_on_gpu:
+        raise ValueError("Cannot add operators on CPU and GPU")
+
     assert isinstance(op1, Operator)
     assert isinstance(op2, Operator)
 
@@ -216,10 +222,18 @@ def add(op1: Operator, op2: Operator, check: bool = False):
 
     shape = tuple([len(new_channels)] + shape1)
 
-    m1 = zeros(shape, dtype=op1.matrix.dtype)
+    m1 = (
+        cp.zeros(shape, dtype=op1.matrix.dtype)
+        if op1_on_gpu
+        else zeros(shape, dtype=op1.matrix.dtype)
+    )
     m1[idx1 > -1] = op1.matrix[idx1[idx1 > -1]]
 
-    m2 = zeros(shape, dtype=op2.matrix.dtype)
+    m2 = (
+        cp.zeros(shape, dtype=op2.matrix.dtype)
+        if op2_on_gpu
+        else zeros(shape, dtype=op2.matrix.dtype)
+    )
     m2[idx2 > -1] = op2.matrix[idx2[idx2 > -1]]
 
     op = Operator()
