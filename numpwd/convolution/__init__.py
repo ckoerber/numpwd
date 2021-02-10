@@ -6,6 +6,11 @@ from numpwd.convolution.channels import get_channel_overlap_indices
 from numpwd.densities import Density
 from numpwd.operators import Operator
 
+try:
+    import cupy as cp
+except ImportError:
+    cp = None
+
 
 def convolute(dens: Density, op: Operator, tol: float = 1.0e-7) -> np.ndarray:
     """Convolutes density and operator."""
@@ -27,20 +32,24 @@ def convolute(dens: Density, op: Operator, tol: float = 1.0e-7) -> np.ndarray:
 
     assert isinstance(op.isospin, pd.DataFrame)
     assert "iso" in op.isospin.columns
-    np.testing.assert_allclose(dens.p, op.args[0][1])
-    np.testing.assert_allclose(dens.p, op.args[1][1])
+
+    backend = cp if cp is not None and isinstance(dens.p, cp.ndarray) else np
+
+    backend.testing.assert_allclose(dens.p, op.args[0][1])
+    backend.testing.assert_allclose(dens.p, op.args[1][1])
 
     # Find allowed transitions
     idx1, idx2 = get_channel_overlap_indices(dens.channels, op.channels)
 
     # Compute the isospin matrix element
-    iso_fact = (
+    iso_fact = backend.array(
         pd.merge(dens.channels.loc[idx1], op.isospin, how="left")["iso"]
         .fillna(0)
         .values
     )
     weight = (dens.p ** 2 * dens.wp).reshape(-1, 1)
     weight = weight.T * weight
-    return (
+    res = (
         (dens.matrix[idx1] * matrix[idx2] * weight).sum(axis=(1, 2)) * iso_fact
     ).sum()
+    return res.dtype.type(res)  # explicitly cast dtype
