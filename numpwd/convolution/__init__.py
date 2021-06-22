@@ -40,7 +40,7 @@ def convolute(dens: Density, op: Operator, tol: float = 1.0e-7) -> np.ndarray:
 
     assert isinstance(op.isospin, pd.DataFrame)
     # ensure backwards comp
-    isospin = op.isospin.replace(columns={"expr": "iso"})
+    isospin = op.isospin.rename(columns={"expr": "iso"})
     assert "iso" in isospin.columns
 
     backend = cp if cp is not None and isinstance(dens.p, cp.ndarray) else np
