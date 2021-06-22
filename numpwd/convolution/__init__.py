@@ -14,11 +14,19 @@ except ImportError:
 
 def convolute(dens: Density, op: Operator, tol: float = 1.0e-7) -> np.ndarray:
     """Convolutes density and operator."""
-    assert len(dens.matrix.shape) == 3
+    if len(dens.matrix.shape) != 3:
+        raise AssertionError(
+            f"Density matrix must be three dimensional"
+            f" but was of dim: {dens.matrix.shape}"
+        )
     if len(op.matrix.shape) == 3:
         matrix = op.matrix
     if len(op.matrix.shape) == 4:
-        assert op.args[2][0] in ("k", "q", "qval", "q3")
+        if op.args[2][0] not in ("k", "q", "qval", "q3"):
+            raise AssertionError(
+                'Third op argument must be one of `("k", "q", "qval", "q3")`'
+                f" but was {op.args[2][0]}"
+            )
         qval = dens.current_info["qval"]
         q_diff = np.abs(op.args[2][1] - qval)
         q_idx = np.argmin(q_diff)
@@ -31,6 +39,7 @@ def convolute(dens: Density, op: Operator, tol: float = 1.0e-7) -> np.ndarray:
         matrix = op.matrix[:, :, :, q_idx]
 
     assert isinstance(op.isospin, pd.DataFrame)
+    op.isospin.repalce(columns={"expr": "iso"}, inplace=True)  # ensure backwards comp
     assert "iso" in op.isospin.columns
 
     backend = cp if cp is not None and isinstance(dens.p, cp.ndarray) else np
