@@ -60,9 +60,6 @@ def prep_dataframe(df):
 
 def read_dataframe(arg, **kwargs):
     """Converts csv or array data to dataframe."""
-    if isinstance(arg, bytes):
-        arg = arg.decode("utf-8")
-
     df = (
         read_csv(StringIO(arg))
         if isinstance(arg, str)

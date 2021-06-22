@@ -86,6 +86,8 @@ class H5ValuePrep:
             if dtype not in self.read_registry:
                 raise TypeError(f"Don't know how to read data of type {dtype}")
             try:
+                if isinstance(obj, bytes):
+                    obj = obj.decode("utf-8")
                 obj = self.read_registry[dtype](obj, **kwargs)
             except Exception as exception:
                 print(
