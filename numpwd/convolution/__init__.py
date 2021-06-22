@@ -18,7 +18,7 @@ def convolute(dens: Density, op: Operator, tol: float = 1.0e-7) -> np.ndarray:
     if len(op.matrix.shape) == 3:
         matrix = op.matrix
     if len(op.matrix.shape) == 4:
-        assert op.args[2][0] in ("k", "q", "qval")
+        assert op.args[2][0] in ("k", "q", "qval", "q3")
         qval = dens.current_info["qval"]
         q_diff = np.abs(op.args[2][1] - qval)
         q_idx = np.argmin(q_diff)
