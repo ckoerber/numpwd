@@ -39,8 +39,9 @@ def convolute(dens: Density, op: Operator, tol: float = 1.0e-7) -> np.ndarray:
         matrix = op.matrix[:, :, :, q_idx]
 
     assert isinstance(op.isospin, pd.DataFrame)
-    op.isospin.repalce(columns={"expr": "iso"}, inplace=True)  # ensure backwards comp
-    assert "iso" in op.isospin.columns
+    # ensure backwards comp
+    isospin = op.isospin.replace(columns={"expr": "iso"})
+    assert "iso" in isospin.columns
 
     backend = cp if cp is not None and isinstance(dens.p, cp.ndarray) else np
 
@@ -52,9 +53,7 @@ def convolute(dens: Density, op: Operator, tol: float = 1.0e-7) -> np.ndarray:
 
     # Compute the isospin matrix element
     iso_fact = backend.array(
-        pd.merge(dens.channels.loc[idx1], op.isospin, how="left")["iso"]
-        .fillna(0)
-        .values
+        pd.merge(dens.channels.loc[idx1], isospin, how="left")["iso"].fillna(0).values
     )
     weight = (dens.p ** 2 * dens.wp).reshape(-1, 1)
     weight = weight.T * weight
