@@ -42,6 +42,8 @@ def convolute(dens: Density, op: Operator, tol: float = 1.0e-7) -> np.ndarray:
     # ensure backwards comp
     isospin = op.isospin.rename(columns={"expr": "iso"})
     assert "iso" in isospin.columns
+    if set(["t_o", "mt_o", "t_i", "mt_i"]) == set(isospin.index.names):
+        isospin = isospin.reset_index()
 
     backend = cp if cp is not None and isinstance(dens.p, cp.ndarray) else np
 
