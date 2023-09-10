@@ -6,35 +6,60 @@ from numpwd.convolution.channels import get_channel_overlap_indices
 from numpwd.densities import Density
 from numpwd.operators import Operator
 
+try:
+    import cupy as cp
+except ImportError:
+    cp = None
+
 
 def convolute(dens: Density, op: Operator, tol: float = 1.0e-7) -> np.ndarray:
     """Convolutes density and operator."""
-    assert len(dens.matrix.shape) == 3
+    if len(dens.matrix.shape) != 3:
+        raise AssertionError(
+            f"Density matrix must be three dimensional"
+            f" but was of dim: {dens.matrix.shape}"
+        )
     if len(op.matrix.shape) == 3:
         matrix = op.matrix
     if len(op.matrix.shape) == 4:
-        assert op.args[2][0] in ("k", "q", "qval")
-        q_diff = np.abs(op.args[2][1] - dens.current_info["qval"])
+        if op.args[2][0] not in ("k", "q", "qval", "q3"):
+            raise AssertionError(
+                'Third op argument must be one of `("k", "q", "qval", "q3")`'
+                f" but was {op.args[2][0]}"
+            )
+        qval = dens.current_info["qval"]
+        q_diff = np.abs(op.args[2][1] - qval)
         q_idx = np.argmin(q_diff)
-        assert q_diff[q_idx] < tol
+        if q_diff[q_idx] > tol:
+            raise ValueError(
+                "Was not able to find matching current momenta for"
+                f" density {dens} and operator {op} at tolerance {tol}."
+                f" best match {q_diff[q_idx]} for {qval} and {op.args[2][1]}"
+            )
         matrix = op.matrix[:, :, :, q_idx]
 
     assert isinstance(op.isospin, pd.DataFrame)
-    assert "iso" in op.isospin.columns
-    np.testing.assert_allclose(dens.p, op.args[0][1])
-    np.testing.assert_allclose(dens.p, op.args[1][1])
+    # ensure backwards comp
+    isospin = op.isospin.rename(columns={"expr": "iso"})
+    assert "iso" in isospin.columns
+    if set(["t_o", "mt_o", "t_i", "mt_i"]) == set(isospin.index.names):
+        isospin = isospin.reset_index()
+
+    backend = cp if cp is not None and isinstance(dens.p, cp.ndarray) else np
+
+    backend.testing.assert_allclose(dens.p, op.args[0][1])
+    backend.testing.assert_allclose(dens.p, op.args[1][1])
 
     # Find allowed transitions
     idx1, idx2 = get_channel_overlap_indices(dens.channels, op.channels)
 
     # Compute the isospin matrix element
-    iso_fact = (
-        pd.merge(dens.channels.loc[idx1], op.isospin, how="left")["iso"]
-        .fillna(0)
-        .values
+    iso_fact = backend.array(
+        pd.merge(dens.channels.loc[idx1], isospin, how="left")["iso"].fillna(0).values
     )
     weight = (dens.p ** 2 * dens.wp).reshape(-1, 1)
     weight = weight.T * weight
-    return (
+    res = (
         (dens.matrix[idx1] * matrix[idx2] * weight).sum(axis=(1, 2)) * iso_fact
     ).sum()
+    return res.dtype.type(res)  # explicitly cast dtype

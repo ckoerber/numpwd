@@ -2,8 +2,10 @@
 from typing import Dict, Tuple, List
 from dataclasses import dataclass, field
 
-from numpy import array, ndarray, allclose
-from pandas import DataFrame
+from numbers import Number
+
+from numpy import array, ndarray, allclose, zeros
+from pandas import DataFrame, merge
 
 try:
     import cupy as cp
@@ -137,3 +139,115 @@ class Operator:
                 val = val.get()
             new_args.append((key, val))
         self.args = new_args
+
+    def __add__(self, other: "Operator"):
+        """Add two operators to form a new operator.
+
+        This includes merging channels and reindexing the matrix as well as
+        joining keywords.
+
+        The user should make sure that operators are logically mergeable--this routine
+        just checks matrix shapes.
+        """
+        return add(self, other, check=False)
+
+    def copy(self):
+        """Create a new operator copied from this instance."""
+        op = Operator()
+        for key in ["channels", "matrix", "isospin", "args", "misc", "mesh_info"]:
+            setattr(op, key, getattr(self, key).copy())
+        return op
+
+    def __mul__(self, number: Number):
+        """Multiply operator matrix with a factor."""
+        if not isinstance(number, Number):
+            raise TypeError(f"{number} must be a number")
+        op = self.copy()
+        op.matrix *= number
+        op.misc["factor"] = number
+        return op
+
+
+def add(op1: Operator, op2: Operator, check: bool = False):
+    """Add two operators to form a new operator.
+
+    This includes merging channels and reindexing the matrix as well as joining keywords.
+
+    The user should make sure that operators are logically mergeable--this routine
+    just checks matrix shapes.
+    """
+    if check:
+        op1.check()
+        op2.check()
+
+    op1_on_gpu = isinstance(op1.matrix, cp.ndarray) if cp is not None else False
+    op2_on_gpu = isinstance(op2.matrix, cp.ndarray) if cp is not None else False
+
+    if op1_on_gpu != op2_on_gpu:
+        raise ValueError("Cannot add operators on CPU and GPU")
+
+    assert isinstance(op1, Operator)
+    assert isinstance(op2, Operator)
+
+    shape1 = list(op1.matrix.shape[1:])
+    shape2 = list(op2.matrix.shape[1:])
+
+    assert shape1 == shape2
+    assert op1.matrix.dtype == op2.matrix.dtype
+
+    for (k1, v1), (k2, v2) in zip(op1.args, op2.args):
+        assert k1 == k2
+        assert allclose(v1, v2)
+
+    if isinstance(op1.isospin, DataFrame):
+        assert op1.isospin.equals(op2.isospin)
+    else:
+        iso_equals = op1.isospin == op2.isospin
+        if hasattr(iso_equals, "__iter__"):
+            assert all(iso_equals)
+        else:
+            assert iso_equals
+
+    new_channels = merge(
+        op1.channels.reset_index(),
+        op2.channels.reset_index(),
+        how="outer",
+        left_on=CHANNEL_COLUMNS,
+        right_on=CHANNEL_COLUMNS,
+        suffixes=("1", "2"),
+    )
+    idx1 = new_channels["index1"].fillna(-1).astype(int).values
+    idx2 = new_channels["index2"].fillna(-1).astype(int).values
+    new_channels = new_channels.drop(["index1", "index2"], axis=1)
+
+    shape = tuple([len(new_channels)] + shape1)
+
+    m1 = (
+        cp.zeros(shape, dtype=op1.matrix.dtype)
+        if op1_on_gpu
+        else zeros(shape, dtype=op1.matrix.dtype)
+    )
+    m1[idx1 > -1] = op1.matrix[idx1[idx1 > -1]]
+
+    m2 = (
+        cp.zeros(shape, dtype=op2.matrix.dtype)
+        if op2_on_gpu
+        else zeros(shape, dtype=op2.matrix.dtype)
+    )
+    m2[idx2 > -1] = op2.matrix[idx2[idx2 > -1]]
+
+    op = Operator()
+    op.args = op1.args
+    op.channels = new_channels
+    op.matrix = m1 + m2
+    op.isospin = op1.isospin
+    op.misc["type"] = "Operator sum"
+    op.misc["op left"] = op1.misc
+    op.misc["op right"] = op2.misc
+    op.mesh_info["op left"] = op1.mesh_info
+    op.mesh_info["op right"] = op2.mesh_info
+
+    if check:
+        op.check()
+
+    return op

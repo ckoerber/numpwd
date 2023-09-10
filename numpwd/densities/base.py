@@ -5,6 +5,12 @@ from dataclasses import dataclass, field
 from numpy import array, ndarray
 from pandas import DataFrame
 
+try:
+    import cupy as cp
+except ImportError:
+    cp = None
+
+
 CHANNEL_COLUMNS = [
     "l_o",
     "s_o",
@@ -62,7 +68,7 @@ class Density:
     dtype: str = "2b"
 
     def check(self):
-        """Runs checks if density was properly initialized."""
+        """Run checks if density was properly initialized."""
         if self.jx2 is None:
             raise ValueError("jx2 was not set.")
 
@@ -86,3 +92,28 @@ class Density:
 
         if self.channels.shape[0] != self.matrix.shape[0]:
             raise ValueError("Channel shape does not match matrix shape.")
+
+    def to_gpu(self):
+        """Move all matrix components to the GPU if possibe.
+
+        Moves args and matrix attrubitue to gpu.
+        Raises import error if cupy not present.
+        """
+        if cp is None:
+            raise ImportError("Failed to import cupy")
+
+        self.matrix = cp.array(self.matrix)
+        self.p = cp.array(self.p)
+        self.wp = cp.array(self.wp)
+
+    def to_cpu(self):
+        """Move all matrix components to the CPU if possibe.
+
+        Moves args and matrix attrubitue to cpu.
+        """
+        if isinstance(self.matrix, cp.ndarray):
+            self.matrix = self.matrix.get()
+        if isinstance(self.p, cp.ndarray):
+            self.p = self.p.get()
+        if isinstance(self.wp, cp.ndarray):
+            self.wp = self.wp.get()

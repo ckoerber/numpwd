@@ -39,6 +39,7 @@ def decompose_operator(
     spin_decomposition_kwargs: Dict[str, Any] = None,
     integration_kwargs: Dict[str, Any] = None,
     misc: Optional[Dict[str, Any]] = None,
+    integrate_sd_kwargs: Optional[Dict[str, Any]] = None,
 ) -> Operator:
     """Runs entire spin partial wave decomposition for operator.
 
@@ -49,6 +50,7 @@ def decompose_operator(
     substitutions = substitutions or []
     spin_decomposition_kwargs = spin_decomposition_kwargs or {}
     integration_kwargs = integration_kwargs or {}
+    integrate_sd_kwargs = integrate_sd_kwargs or {}
 
     operator = Operator()
     operator.misc = dict(misc) if misc else {}
@@ -132,6 +134,7 @@ def decompose_operator(
         numeric_zero=operator.misc["numeric_zero"],
         m_lambda_max=operator.misc["m_lambda_max"],
         gpu=gpu,
+        **integrate_sd_kwargs,
     )
 
     operator.misc["computation_end"] = datetime.now()

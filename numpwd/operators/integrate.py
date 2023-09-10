@@ -104,6 +104,9 @@ class Integrator:
                 res = self.poly.integrate(
                     tensor, m_lambda, adaptive_chunks=self.adaptive_chunks,
                 )
+                del tensor
+                if gpu:
+                    cp.get_default_memory_pool().free_all_blocks()
             else:
                 res = dict()
             for (l_o, l_i, la, mla), matrix in res.items():
