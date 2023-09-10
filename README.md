@@ -1,5 +1,7 @@
 # numpwd
 
+**Note: This repository is not beeing maintained as of 2022.**
+
 Python module to convert two-nucleon operators from math-expressions (sympy) to partial wave decomposed arrays in momentum space.
 
 ## Description
